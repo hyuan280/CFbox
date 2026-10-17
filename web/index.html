@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthetic UI Dataset Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:15px Arial,sans-serif;background:var(--bg);color:var(--fg);overflow:hidden}header{height:76px;padding:24px 5%;border-bottom:1px solid #8884;display:flex;justify-content:space-between}main{padding:40px 6%;display:grid;grid-template-columns:2fr 1fr;gap:28px}.card{padding:28px;border:1px solid #8884;border-radius:10px;background:var(--panel)}h1{font-size:32px;margin:0 0 24px}p{line-height:1.7;opacity:.75}input{display:block;width:100%;padding:12px;margin:18px 0;border:1px solid #8886;background:transparent;color:inherit;border-radius:5px}button{padding:12px 24px;background:var(--accent);color:white;border:0;border-radius:5px}.bar{height:13px;background:#8883;margin:20px 0;border-radius:4px}.widget{position:fixed;display:flex;align-items:center;justify-content:space-between;width:300px;height:66px;padding:12px;border:1px solid #d0d0d0;background:#fafafa;color:#252525;font:14px Arial,sans-serif;transform-origin:top left;box-shadow:0 1px 3px #0001}.widget.dark{background:#232323;color:#eee;border-color:#555}.left{display:flex;align-items:center;gap:12px}.checkbox{width:25px;height:25px;border:2px solid #777;background:#fff}.mark{width:25px;height:25px;display:flex;align-items:center;justify-content:center;font-size:25px;color:#27995c}.spinner{width:23px;height:23px;border:3px solid #b7d4c1;border-top-color:#28925b;border-radius:50%}.error{color:#bd4141;font-size:24px;width:25px;text-align:center}.brand{text-align:center;font-size:9px;line-height:1.4}.cloud{color:#f49a37;font-size:29px;line-height:24px}.brand strong{display:block;font-size:10px}.legal{font-size:8px;color:#888}.decoy{position:fixed;padding:14px;background:var(--panel);border:1px solid #8885;border-radius:6px;display:flex;align-items:center;gap:10px}
+</style>
+<header><strong id="brand"></strong><span>Overview &nbsp; / &nbsp; Workspace &nbsp; / &nbsp; Account</span></header>
+<main><section class="card"><h1 id="title"></h1><p id="intro"></p><div id="content"></div></section><aside class="card"><h2>Activity</h2><p>Recent updates and workspace information</p><div class="bar"></div><div class="bar" style="width:75%"></div><div class="bar" style="width:88%"></div><p>Manage your preferences and notifications.</p></aside></main>
+<script>
+const q=new URLSearchParams(location.search);
+let seed=Number(q.get('seed')||1)>>>0;
+function random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
+function pick(xs){return xs[Math.floor(random()*xs.length)]}
+const family=q.get('family')||'portal';
+const dark=random()<.5;
+document.documentElement.style.cssText=dark?'--bg:#121923;--fg:#e5e9f1;--panel:#1c2735;--accent:#426cc9':'--bg:#f3f5f8;--fg:#253042;--panel:#fff;--accent:#327b75';
+const titles={portal:'Access your workspace',article:'A practical guide to better systems',dashboard:'Workspace analytics',checkout:'Review your order',support:'How can we help?',settings:'Account preferences'};
+document.querySelector('#brand').textContent=pick(['Northstar','Fieldnotes','Atlas','Workbench']);
+document.querySelector('#title').textContent=titles[family]||titles.portal;
+document.querySelector('#intro').textContent=pick(['Keep your projects organized in one place.','Tools and resources for your everyday work.','Review the latest information before continuing.']);
+document.querySelector('#content').innerHTML=['portal','checkout','settings'].includes(family)?'<input placeholder="Email address"><input placeholder="Reference or password"><button>Continue</button>':'<p>Building reliable workflows starts with clear information and thoughtful defaults.</p>'+Array.from({length:7},()=>'<div class="bar" style="width:'+Math.round(40+random()*60)+'%"></div>').join('');
+const state=q.get('state')||'unchecked';
+const english=random()<.5;
+const texts=english?{unchecked:'Verify you are human',verified:'Success!',processing:'Verifying...',error:'Verification expired'}:{unchecked:'\u786e\u8ba4\u60a8\u662f\u771f\u4eba',verified:'\u9a8c\u8bc1\u6210\u529f',processing:'\u6b63\u5728\u9a8c\u8bc1...',error:'\u9a8c\u8bc1\u5df2\u8fc7\u671f'};
+if(state!=='absent'){
+ const scale=.8+random()*.65;
+ const widget=document.createElement('div');widget.id='cf-widget';widget.className='widget'+(random()<.5?' dark':'');
+ const icons={unchecked:'<div id="checkbox" class="checkbox"></div>',verified:'<div class="mark">&#10003;</div>',processing:'<div class="spinner"></div>',error:'<div class="error">!</div>'};
+ widget.innerHTML='<div class="left">'+icons[state]+'<span>'+texts[state]+'</span></div><div class="brand"><div class="cloud">&#9729;</div><strong>CLOUDFLARE</strong><div class="legal">Privacy &middot; Terms</div></div>';
+ widget.style.zIndex='2';widget.style.transform='scale('+scale+')';
+ widget.style.left=Math.floor(12+random()*Math.max(0,innerWidth-300*scale-24))+'px';
+ widget.style.top=Math.floor(90+random()*Math.max(0,innerHeight-66*scale-106))+'px';
+ document.body.append(widget);
+}
+const decoy=document.createElement('div');decoy.className='decoy';decoy.style.left='6%';decoy.style.bottom='22px';decoy.innerHTML='<div class="checkbox"></div>'+pick(['Remember me','Accept the terms','Subscribe to updates']);document.body.append(decoy);
+document.fonts.ready.then(()=>{document.body.dataset.ready='true';document.body.dataset.state=state;document.body.dataset.family=family});
+</script>
+</html>

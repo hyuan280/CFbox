@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+datasets/
+models/
+runs/
+.ultralytics/
+overlays/
+results/
+reports/
+*.pt
+*.onnx
+.DS_Store
