@@ -118,7 +118,7 @@ python3 -m venv .venv
 
 ## ONNX 导出
 
-部署镜像只使用 ONNX Runtime。训练完成后，在本地导出两个固定尺寸模型：
+部署镜像只使用 ONNX Runtime。训练完成后，在本地导出两个动态宽高模型（最大边长分别为 1280 和 640）：
 
 ```bash
 .venv/bin/python -m pip install -r requirements-export.txt
@@ -129,12 +129,12 @@ python3 -m venv .venv
 输出：
 
 ```text
-models/onnx/widget.onnx      # 1×3×1280×1280
-models/onnx/state.onnx       # 1×3×640×640
+models/onnx/widget.onnx      # 1×3×H×W，最大边长 1280
+models/onnx/state.onnx       # 1×3×H×W，最大边长 640
 models/onnx/manifest.json
 ```
 
-`manifest.json` 保存类别名、输入尺寸、opset 和导出信息。两个 ONNX 文件约 21 MB，已加入 `.gitignore` 白名单，随代码提交；重新训练后需要重新导出并提交更新。
+`manifest.json` 保存类别名、最大输入尺寸、opset 和导出信息。两个 ONNX 文件约 20 MB，已加入 `.gitignore` 白名单，随代码提交；重新训练后需要重新导出并提交更新。默认导出动态宽高；需要固定正方形输入时可使用 `export_onnx.py --no-dynamic`。
 
 `verify_onnx.py` 会比较 torch 与 ONNX 的组件存在性、状态、组件框 IoU、复选框中心误差和延迟。默认只在组件存在性或中心命中出现差异时失败；`--strict-state` 会把状态差异也视为失败。
 
@@ -198,7 +198,7 @@ print(result["checkbox_center_pct"])
 
 `unknown` 是保守结果：状态置信度不足、不同状态类别冲突、复选框框过于细长或中心越界时，不会猜测坐标。裁剪时固定外扩 8 像素，与生成训练裁剪的规则一致。
 
-ONNX 输入固定为 widget `1280×1280`、state `640×640`。大图会按比例缩小并填充，小图会按比例放大并填充，不会拉伸或直接裁剪；推理后再把坐标映射回原图。超过 `CFBOX_MAX_PIXELS` 的图片在解码阶段拒绝。
+ONNX 使用动态宽高输入，最大边长分别为 widget `1280`、state `640`，并按 stride 32 做矩形 letterbox，以匹配 PyTorch 的推理几何。大图会按比例缩小，小图会按比例放大，不会拉伸或直接裁剪；推理后再把坐标映射回原图。超过 `CFBOX_MAX_PIXELS` 的图片在解码阶段拒绝。
 
 ## 评估当前模型
 
@@ -229,7 +229,7 @@ ONNX 输入固定为 widget `1280×1280`、state `640×640`。大图会按比例
 
 ## Docker HTTP 服务
 
-`app.py` 提供 FastAPI 接口，`Dockerfile` 构建 ONNX-only CPU 镜像。镜像默认自带 `models/onnx/`，不安装 torch、torchvision、Ultralytics 或 OpenCV。实测镜像大小约 **350 MB**。
+`app.py` 提供 FastAPI 接口，`Dockerfile` 构建 ONNX-only CPU 镜像。镜像默认自带 `models/onnx/`，不安装 torch、torchvision 或 Ultralytics；只使用 OpenCV headless 做与 PyTorch 一致的预处理。实测镜像大小约 **506 MB**。
 
 ### 启动
 
@@ -241,7 +241,7 @@ docker compose ps
 docker compose logs -f cfbox-api
 ```
 
-默认监听 `http://localhost:8000`。构建只下载 FastAPI、ONNX Runtime、NumPy、Pillow 等依赖，不再下载 196 MB PyTorch。如果 `docker compose up --build` 的构建容器无法解析域名，先手动构建再启动：
+默认监听 `http://localhost:8000`。构建只下载 FastAPI、ONNX Runtime、OpenCV headless、NumPy、Pillow 等依赖，不再下载 196 MB PyTorch。如果 `docker compose up --build` 的构建容器无法解析域名，先手动构建再启动：
 
 ```bash
 docker build --network=host -t cfbox-api:latest .
@@ -265,13 +265,15 @@ docker run \
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/health` | 存活检查，不需要鉴权 |
-| GET | `/ready` | 模型是否加载完成 |
-| GET | `/info` | 后端、模型路径、阈值、限制和鉴权状态 |
-| POST | `/predict` | multipart 上传字段 `image` |
+| GET | `/health` | 存活检查，不需要鉴权，模型卸载后仍返回 200 |
+| GET | `/ready` | 模型是否已加载；未加载时返回 503 |
+| GET | `/info` | 后端、模型路径、阈值、限制、生命周期和鉴权状态 |
+| POST | `/predict` | multipart 上传字段 `image`；模型未加载时自动加载 |
+| POST | `/models/load` | 主动加载模型，可重置空闲计时 |
+| POST | `/models/unload` | 主动卸载模型并释放内存 |
 | GET | `/docs` | OpenAPI 交互文档 |
 
-设置 `CFBOX_API_KEY` 后，`/predict` 支持：
+设置 `CFBOX_API_KEY` 后，`/predict`、`/models/load`、`/models/unload` 支持：
 
 ```bash
 curl -s http://localhost:8000/health
@@ -282,9 +284,27 @@ curl -s \
   -H "X-API-Key: $CFBOX_API_KEY" \
   -F "image=@screenshot.png" \
   http://localhost:8000/predict | python3 -m json.tool
+
+curl -s -X POST \
+  -H "X-API-Key: $CFBOX_API_KEY" \
+  http://localhost:8000/models/load
+
+curl -s -X POST \
+  -H "X-API-Key: $CFBOX_API_KEY" \
+  http://localhost:8000/models/unload
 ```
 
 也支持 `Authorization: Bearer <key>`。未设置 `CFBOX_API_KEY` 时不鉴权，只适合可信内网。对外部署应放在 TLS 反向代理后，并限制请求频率。
+
+模型生命周期：
+
+- 默认启动时加载模型，空闲 `CFBOX_IDLE_UNLOAD_SECONDS` 秒后自动卸载。
+- 设置 `CFBOX_IDLE_UNLOAD_SECONDS=0` 可关闭自动卸载。
+- 设置 `CFBOX_LOAD_ON_STARTUP=false` 可让容器启动后保持未加载状态。
+- 模型卸载后 `/ready` 返回 503，`/health` 仍返回 200；下一次 `/predict` 或 `POST /models/load` 会重新加载。
+- 卸载时会释放模型和 ONNX Runtime 会话，并调用 `gc.collect()` 和 Linux `malloc_trim`。RSS 是否立即下降取决于内存分配器，通常会有一定滞后。
+
+本机容器实测（仅参考）：加载后 RSS 约 260–320 MB，手动卸载后约 110–120 MB，重新加载后约 265 MB。
 
 响应在原有检测结果上增加 `request_id`：
 
@@ -317,10 +337,12 @@ curl -s \
 | `CFBOX_CONF_STATE` | `0.25` | 状态置信度阈值 |
 | `CFBOX_CONFLICT_MARGIN` | `0.15` | 状态类别冲突阈值 |
 | `CFBOX_IOU` | `0.7` | NMS IoU 阈值 |
+| `CFBOX_IDLE_UNLOAD_SECONDS` | `300` | 空闲卸载秒数，0 表示关闭 |
+| `CFBOX_LOAD_ON_STARTUP` | `true` | 启动时是否加载模型 |
 | `CFBOX_MAX_UPLOAD_MB` | `10` | 单个上传大小上限 |
 | `CFBOX_MAX_PIXELS` | `50000000` | 解码后的像素上限 |
 
-输入尺寸由 `manifest.json` 固定，服务不提供运行时改尺寸。需要 1920 输入时重新导出 ONNX 并更新 manifest。
+最大输入尺寸由 `manifest.json` 中的 `imgsz` 控制，实际推理尺寸按图片比例和 stride 32 计算。需要 1920 最大输入时重新导出 ONNX 并更新 manifest。
 
 服务固定单进程，ONNX Runtime 会话复用，推理请求串行执行，避免 CPU 线程过订阅。需要更高吞吐时应部署多个容器实例，而不是把 `--workers` 调大。
 
@@ -353,14 +375,14 @@ Ultralytics YOLO 默认使用 AGPL-3.0，其官方说明也把训练模型纳入
 | 状态分布 | absent、unchecked、verified、processing、error 各 10 张 |
 | widget 模型 | YOLO11n，50 epochs，`imgsz=1280`，CPU |
 | state 模型 | YOLO11n，50 epochs，`imgsz=640`，CPU |
-| 部署模型 | ONNX，opset 17，FP32，固定输入尺寸 |
+| 部署模型 | ONNX，opset 17，FP32，动态矩形输入 |
 
 ### ONNX 检测结果
 
 | 数据 | 组件召回 | 无组件误报 | 组件 IoU | 状态 top-1 | 中心命中 | 中心误差 | 端到端完全正确 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| test，5 张 | 4/4 | 0/1 | 0.928 | 2/4 | 1/1 | 0.38 px | 3/5 |
-| all，50 张 | 40/40 | 0/10 | 0.950 | 20/40 | 10/10 | 0.51 px | 30/50 |
+| test，5 张 | 4/4 | 0/1 | 0.932 | 2/4 | 1/1 | 0.31 px | 3/5 |
+| all，50 张 | 40/40 | 0/10 | 0.948 | 18/40 | 10/10 | 0.49 px | 28/50 |
 
 test 只有 5 张，比例没有统计意义；`all` 包含训练图片，也不是独立测试集。
 
@@ -369,7 +391,7 @@ test 只有 5 张，比例没有统计意义；`all` 包含训练图片，也不
 | GT \ Pred | unchecked | verified | processing | error | unknown |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | verified | 0 | 0 | 0 | 0 | 10 |
-| processing | 0 | 2 | 0 | 0 | 8 |
+| processing | 0 | 1 | 0 | 0 | 9 |
 | error | 0 | 0 | 0 | 8 | 2 |
 
 `unchecked` 10/10 正确，`absent` 10/10 正确；`verified` 全部无法确定，`processing` 多数无法确定。
@@ -379,9 +401,9 @@ test 只有 5 张，比例没有统计意义；`all` 包含训练图片，也不
 | 指标 | 结果 |
 | --- | --- |
 | 组件存在性差异 | 0/50 |
-| 状态差异 | 5/50，边界样本 |
-| 组件框 IoU | 0.980 |
-| 复选框中心 L1 误差 | 0.259 px |
+| 状态差异 | 0/50 |
+| 组件框 IoU | 1.000 |
+| 复选框中心 L1 误差 | 0.086 px |
 | 中心命中失败 | 0 |
 
 ### 解读

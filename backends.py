@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -36,12 +37,38 @@ def letterbox(image: Image.Image, imgsz: int, padding: int = 114) -> tuple[np.nd
     ratio = min(imgsz / width, imgsz / height)
     resized_width = max(1, round(width * ratio))
     resized_height = max(1, round(height * ratio))
-    resized = image.resize((resized_width, resized_height), Image.Resampling.BILINEAR)
-    canvas = Image.new('RGB', (imgsz, imgsz), (padding, padding, padding))
+    resized = cv2.resize(np.asarray(image), (resized_width, resized_height),
+                         interpolation=cv2.INTER_LINEAR)
+    canvas = np.full((imgsz, imgsz, 3), padding, dtype=np.uint8)
     left = round((imgsz - resized_width) / 2 - 0.1)
     top = round((imgsz - resized_height) / 2 - 0.1)
-    canvas.paste(resized, (left, top))
-    array = np.asarray(canvas, dtype=np.float32) / 255.0
+    canvas[top:top + resized_height, left:left + resized_width] = resized
+    array = canvas.astype(np.float32) / 255.0
+    array = np.ascontiguousarray(array.transpose(2, 0, 1)[None])
+    return array, LetterboxMeta(ratio, left, top, width, height,
+                                resized_width, resized_height)
+
+
+def rect_letterbox(image: Image.Image, max_size: int, stride: int = 32,
+                   padding: int = 114) -> tuple[np.ndarray, LetterboxMeta]:
+    """Ultralytics-style rectangular letterbox with stride-aligned padding."""
+    image = image.convert('RGB')
+    width, height = image.size
+    if width < 1 or height < 1:
+        raise ValueError('Image must have positive dimensions')
+    ratio = min(max_size / width, max_size / height)
+    resized_width = max(1, round(width * ratio))
+    resized_height = max(1, round(height * ratio))
+    pad_width = (max_size - resized_width) % stride
+    pad_height = (max_size - resized_height) % stride
+    left = round(pad_width / 2 - 0.1)
+    top = round(pad_height / 2 - 0.1)
+    resized = cv2.resize(np.asarray(image), (resized_width, resized_height),
+                         interpolation=cv2.INTER_LINEAR)
+    canvas = np.full((resized_height + pad_height, resized_width + pad_width, 3),
+                     padding, dtype=np.uint8)
+    canvas[top:top + resized_height, left:left + resized_width] = resized
+    array = canvas.astype(np.float32) / 255.0
     array = np.ascontiguousarray(array.transpose(2, 0, 1)[None])
     return array, LetterboxMeta(ratio, left, top, width, height,
                                 resized_width, resized_height)
@@ -177,8 +204,15 @@ class OnnxBackend:
         inputs = self.session.get_inputs()
         if len(inputs) != 1:
             raise ValueError(f'{path} must have exactly one input')
-        if list(inputs[0].shape) != [1, 3, imgsz, imgsz]:
-            raise ValueError(f'{path} input shape is {inputs[0].shape}, '
+        input_shape = inputs[0].shape
+        if len(input_shape) != 4 or input_shape[1] != 3:
+            raise ValueError(f'{path} input shape is {input_shape}, expected NCHW')
+        if input_shape[0] not in (1, 'batch', None):
+            raise ValueError(f'{path} has unsupported batch dimension: {input_shape[0]}')
+        self.dynamic = any(isinstance(value, str) or value is None
+                           for value in input_shape[2:])
+        if not self.dynamic and list(input_shape) != [1, 3, imgsz, imgsz]:
+            raise ValueError(f'{path} input shape is {input_shape}, '
                              f'expected [1, 3, {imgsz}, {imgsz}]')
         self.input_name = inputs[0].name
         self.output_name = self.session.get_outputs()[0].name
@@ -186,7 +220,10 @@ class OnnxBackend:
         self.session.run([self.output_name], {self.input_name: warmup})
 
     def detect(self, image: Image.Image, conf: float, classes: list[int]) -> list[Detection]:
-        tensor, meta = letterbox(image, self.imgsz)
+        if self.dynamic:
+            tensor, meta = rect_letterbox(image, self.imgsz)
+        else:
+            tensor, meta = letterbox(image, self.imgsz)
         output = self.session.run([self.output_name], {self.input_name: tensor})[0]
         return decode_output(output, meta, conf, self.iou, self.max_det,
                              classes, len(self.names))

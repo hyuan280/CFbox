@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 from backends import (LetterboxMeta, decode_output, letterbox, nms,
-                      unletterbox, xywh_to_xyxy)
+                      rect_letterbox, unletterbox, xywh_to_xyxy)
 from cfbox_detector import CFChallengeDetector, ROOT
 
 ONNX_WIDGET = ROOT / 'models/onnx/widget.onnx'
@@ -27,6 +27,17 @@ class BackendUnitTests(unittest.TestCase):
         self.assertEqual(meta.ratio, 4)
         self.assertEqual((meta.resized_width, meta.resized_height), (1280, 960))
         self.assertEqual(meta.top, 160)
+
+    def test_letterbox_keeps_rgb_channel_order(self):
+        tensor, _ = letterbox(Image.new('RGB', (10, 10), (255, 0, 0)), 10)
+        self.assertAlmostEqual(float(tensor[0, 0, 5, 5]), 1.0)
+        self.assertAlmostEqual(float(tensor[0, 2, 5, 5]), 0.0)
+
+    def test_rect_letterbox_matches_ultralytics_geometry(self):
+        tensor, meta = rect_letterbox(Image.new('RGB', (1920, 1107), 'white'), 1280)
+        self.assertEqual(tensor.shape, (1, 3, 768, 1280))
+        self.assertEqual((meta.resized_width, meta.resized_height), (1280, 738))
+        self.assertEqual((meta.left, meta.top), (0, 15))
 
     def test_xywh_conversion_does_not_mutate_inputs(self):
         converted = xywh_to_xyxy(np.array([[50, 50, 20, 10]], dtype=np.float32))

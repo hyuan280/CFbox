@@ -20,6 +20,8 @@ services:
       CFBOX_API_KEY: "${CFBOX_API_KEY:-}"
       CFBOX_MAX_UPLOAD_MB: "${CFBOX_MAX_UPLOAD_MB:-10}"
       CFBOX_MAX_PIXELS: "${CFBOX_MAX_PIXELS:-50000000}"
+      CFBOX_IDLE_UNLOAD_SECONDS: "${CFBOX_IDLE_UNLOAD_SECONDS:-300}"
+      CFBOX_LOAD_ON_STARTUP: "${CFBOX_LOAD_ON_STARTUP:-true}"
       CFBOX_LOG_LEVEL: "${CFBOX_LOG_LEVEL:-INFO}"
     # Optional: replace the baked-in models without rebuilding.
     # volumes:

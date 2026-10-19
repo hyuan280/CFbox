@@ -13,7 +13,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CFBOX_BACKEND=onnx \
     CFBOX_WIDGET_WEIGHTS=/models/onnx/widget.onnx \
     CFBOX_STATE_WEIGHTS=/models/onnx/state.onnx \
-    CFBOX_MODEL_MANIFEST=/models/onnx/manifest.json
+    CFBOX_MODEL_MANIFEST=/models/onnx/manifest.json \
+    CFBOX_IDLE_UNLOAD_SECONDS=300 \
+    CFBOX_LOAD_ON_STARTUP=true
 
 WORKDIR /app
 

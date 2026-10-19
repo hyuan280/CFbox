@@ -4,3 +4,4 @@ python-multipart==0.0.32
 Pillow>=10,<13
 numpy>=1.23
 onnxruntime==1.26.0
+opencv-python-headless==5.0.0.93

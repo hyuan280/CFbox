@@ -1,10 +1,11 @@
 {
   "format": "onnx",
   "opset": 17,
-  "exported_at": "2026-10-19T02:11:24.524930+00:00",
+  "exported_at": "2026-10-19T03:10:54.106319+00:00",
   "widget": {
     "file": "widget.onnx",
     "imgsz": 1280,
+    "dynamic": true,
     "names": {
       "0": "cf_widget"
     },
@@ -16,12 +17,14 @@
         1,
         5,
         33600
-      ]
+      ],
+      "dynamic": true
     }
   },
   "state": {
     "file": "state.onnx",
     "imgsz": 640,
+    "dynamic": true,
     "names": {
       "0": "checkbox_unchecked",
       "1": "state_verified",
@@ -36,7 +39,8 @@
         1,
         8,
         8400
-      ]
+      ],
+      "dynamic": true
     }
   }
 }

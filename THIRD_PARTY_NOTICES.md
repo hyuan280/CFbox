@@ -16,6 +16,7 @@ artifacts used by the project. It is informational and is not legal advice.
 | Pillow | 12.3.0 | MIT-CMU |
 | NumPy | 2.4.6 | BSD-3-Clause and bundled licenses |
 | ONNX Runtime | 1.26.0 | MIT |
+| OpenCV headless | 5.0.0.93 | Apache-2.0 |
 
 The Docker image does not include PyTorch, torchvision, or Ultralytics.
 

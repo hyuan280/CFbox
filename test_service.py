@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import time
 import unittest
 
 from fastapi.testclient import TestClient
@@ -17,6 +18,8 @@ os.environ['CFBOX_BACKEND'] = 'onnx'
 os.environ['CFBOX_API_KEY'] = API_KEY
 os.environ['CFBOX_THREADS'] = '2'
 os.environ['CFBOX_MAX_UPLOAD_MB'] = '2'
+os.environ['CFBOX_IDLE_UNLOAD_SECONDS'] = '0'
+os.environ['CFBOX_LOAD_ON_STARTUP'] = 'true'
 os.environ['CFBOX_LOG_LEVEL'] = 'WARNING'
 
 from app import app  # noqa: E402
@@ -48,6 +51,31 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['backend'], 'onnx')
         self.assertTrue(response.json()['auth_required'])
+        self.assertTrue(response.json()['loaded'])
+        self.assertEqual(response.json()['lifecycle']['idle_unload_seconds'], 0)
+
+    def test_model_management_requires_key(self):
+        self.assertEqual(self.client.post('/models/load').status_code, 401)
+        self.assertEqual(self.client.post('/models/unload').status_code, 401)
+
+    def test_models_unload_load_and_autoload(self):
+        unloaded = self.client.post('/models/unload', headers=self.headers)
+        self.assertEqual(unloaded.status_code, 200)
+        self.assertFalse(unloaded.json()['loaded'])
+        self.assertEqual(self.client.get('/ready').status_code, 503)
+        self.assertFalse(self.client.get('/info').json()['loaded'])
+
+        loaded = self.client.post('/models/load', headers=self.headers)
+        self.assertEqual(loaded.status_code, 200)
+        self.assertTrue(loaded.json()['loaded'])
+        self.assertEqual(self.client.get('/ready').status_code, 200)
+
+        self.client.post('/models/unload', headers=self.headers)
+        predicted = self.client.post(
+            '/predict', files={'image': ('sample.png', self.unchecked, 'image/png')},
+            headers=self.headers)
+        self.assertEqual(predicted.status_code, 200)
+        self.assertEqual(self.client.get('/ready').status_code, 200)
 
     def test_predict_requires_key(self):
         response = self.client.post('/predict', files={
@@ -100,5 +128,32 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(response.json()['detail']['code'], 'image_too_large')
 
 
-if __name__ == '__main__':
+@unittest.skipUnless(WIDGET.is_file() and STATE.is_file() and MANIFEST.is_file(),
+                     'ONNX models are not available')
+class IdleUnloadTests(unittest.TestCase):
+    def test_idle_timeout_unloads_and_api_reloads(self):
+        old_timeout = os.environ.get('CFBOX_IDLE_UNLOAD_SECONDS')
+        old_startup = os.environ.get('CFBOX_LOAD_ON_STARTUP')
+        os.environ['CFBOX_IDLE_UNLOAD_SECONDS'] = '1'
+        os.environ['CFBOX_LOAD_ON_STARTUP'] = 'true'
+        try:
+            with TestClient(app) as client:
+                self.assertEqual(client.get('/ready').status_code, 200)
+                time.sleep(2.5)
+                self.assertEqual(client.get('/ready').status_code, 503)
+                loaded = client.post('/models/load', headers={'X-API-Key': API_KEY})
+                self.assertEqual(loaded.status_code, 200)
+                self.assertEqual(client.get('/ready').status_code, 200)
+        finally:
+            if old_timeout is None:
+                os.environ.pop('CFBOX_IDLE_UNLOAD_SECONDS', None)
+            else:
+                os.environ['CFBOX_IDLE_UNLOAD_SECONDS'] = old_timeout
+            if old_startup is None:
+                os.environ.pop('CFBOX_LOAD_ON_STARTUP', None)
+            else:
+                os.environ['CFBOX_LOAD_ON_STARTUP'] = old_startup
+
+
+if __name__ == "__main__":
     unittest.main()

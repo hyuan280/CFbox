@@ -16,13 +16,13 @@ os.environ.setdefault('YOLO_AUTOINSTALL', 'false')
 
 
 def export_model(weights: Path, output: Path, name: str, imgsz: int,
-                 opset: int) -> dict:
+                 opset: int, dynamic: bool) -> dict:
     from ultralytics import YOLO, __version__
 
     model = YOLO(str(weights))
     names = {int(key): str(value) for key, value in model.names.items()}
     exported = Path(model.export(format='onnx', imgsz=imgsz, opset=opset, batch=1,
-                                 dynamic=False, simplify=False, nms=False,
+                                 dynamic=dynamic, simplify=False, nms=False,
                                  device='cpu'))
     destination = output / f'{name}.onnx'
     if exported.resolve() == destination.resolve():
@@ -30,8 +30,8 @@ def export_model(weights: Path, output: Path, name: str, imgsz: int,
     elif destination.exists():
         destination.unlink()
     shutil.move(str(exported), destination)
-    return {'file': destination.name, 'imgsz': imgsz, 'names': names,
-            'ultralytics_version': __version__}
+    return {'file': destination.name, 'imgsz': imgsz, 'dynamic': dynamic,
+            'names': names, 'ultralytics_version': __version__}
 
 
 def verify_model(path: Path, imgsz: int) -> dict:
@@ -44,14 +44,19 @@ def verify_model(path: Path, imgsz: int) -> dict:
     if len(inputs) != 1:
         raise RuntimeError(f'{path} must have exactly one input, found {len(inputs)}')
     shape = inputs[0].shape
+    if len(shape) != 4 or shape[1] != 3:
+        raise RuntimeError(f'{path} input shape is {shape}, expected NCHW')
+    if shape[0] not in (1, 'batch', None):
+        raise RuntimeError(f'{path} has unsupported batch dimension: {shape[0]}')
+    dynamic = any(isinstance(value, str) or value is None for value in shape[2:])
     expected = [1, 3, imgsz, imgsz]
-    if list(shape) != expected:
+    if not dynamic and list(shape) != expected:
         raise RuntimeError(f'{path} input shape is {shape}, expected {expected}')
-    dummy = np.zeros(shape, dtype=np.float32)
+    dummy = np.zeros(expected, dtype=np.float32)
     prediction = session.run(None, {inputs[0].name: dummy})[0]
-    print(f'{path.name}: input={shape} output={prediction.shape}')
+    print(f'{path.name}: input={shape} output={prediction.shape} dynamic={dynamic}')
     return {'input': inputs[0].name, 'output': outputs[0].name,
-            'output_shape': list(prediction.shape)}
+            'output_shape': list(prediction.shape), 'dynamic': dynamic}
 
 
 def main():
@@ -64,6 +69,8 @@ def main():
     parser.add_argument('--imgsz-widget', type=int, default=1280)
     parser.add_argument('--imgsz-state', type=int, default=640)
     parser.add_argument('--opset', type=int, default=17)
+    parser.add_argument('--no-dynamic', action='store_true',
+                        help='Export fixed square inputs instead of dynamic H/W')
     parser.add_argument('--no-verify', action='store_true')
     args = parser.parse_args()
     if min(args.imgsz_widget, args.imgsz_state, args.opset) < 1:
@@ -73,10 +80,11 @@ def main():
             sys.exit(f'error: weights not found: {path}')
     args.output.mkdir(parents=True, exist_ok=True)
 
+    dynamic = not args.no_dynamic
     widget = export_model(args.widget, args.output, 'widget',
-                          args.imgsz_widget, args.opset)
+                          args.imgsz_widget, args.opset, dynamic)
     state = export_model(args.state, args.output, 'state',
-                         args.imgsz_state, args.opset)
+                         args.imgsz_state, args.opset, dynamic)
     manifest = {
         'format': 'onnx',
         'opset': args.opset,
