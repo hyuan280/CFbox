@@ -1,0 +1,3 @@
+-r requirements-train.txt
+onnx>=1.12,<2
+onnxruntime==1.26.0

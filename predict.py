@@ -37,10 +37,13 @@ def main():
                         default=ROOT / 'runs/state/weights/best.pt')
     parser.add_argument('--conf-widget', type=float, default=0.25)
     parser.add_argument('--conf-state', type=float, default=0.25)
-    parser.add_argument('--imgsz-widget', type=int, default=1280)
-    parser.add_argument('--imgsz-state', type=int, default=640)
+    parser.add_argument('--imgsz-widget', type=int)
+    parser.add_argument('--imgsz-state', type=int)
     parser.add_argument('--threads', type=int, default=8)
     parser.add_argument('--device', default='cpu')
+    parser.add_argument('--backend', choices=['auto', 'onnx', 'torch'], default='auto')
+    parser.add_argument('--manifest', type=Path)
+    parser.add_argument('--iou', type=float, default=0.7)
     args = parser.parse_args()
     if not args.image and not args.images_dir:
         parser.error('Provide --image or --images-dir')
@@ -52,7 +55,8 @@ def main():
             args.widget_weights, args.state_weights,
             imgsz_widget=args.imgsz_widget, imgsz_state=args.imgsz_state,
             conf_widget=args.conf_widget, conf_state=args.conf_state,
-            device=args.device, threads=args.threads)
+            device=args.device, threads=args.threads, backend=args.backend,
+            manifest=args.manifest, iou=args.iou)
     except (FileNotFoundError, ValueError) as exc:
         parser.error(str(exc))
     if args.overlay_dir:

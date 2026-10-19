@@ -1,6 +1,6 @@
 # CFbox
 
-使用本地 HTML/CSS 模拟验证组件，通过 **Camofox REST API** 访问页面、截取视口并读取 DOM 边界，自动导出两阶段 YOLO 数据集；另含 CPU 训练、两阶段推理和评估脚本。无需 Playwright 客户端或大模型。
+使用本地 HTML/CSS 模拟验证组件，通过 **Camofox REST API** 访问页面、截取视口并读取 DOM 边界，自动导出两阶段 YOLO 数据集；另含 CPU 训练、ONNX 导出、两阶段推理、HTTP 服务和评估脚本。无需 Playwright 客户端或大模型。
 
 这是合成数据生成器，不是验证破解工具。不访问真实挑战、不提交验证、不自动点击。模拟组件并非官方组件，合成集指标不能代表真实场景准确率。
 
@@ -105,7 +105,7 @@ python3 -m venv .venv
 .venv/bin/python train.py --stage state --dataset datasets/demo --epochs 50
 ```
 
-默认 CPU、8 个计算线程、batch=2、数据加载 workers=0。全图默认 1280，局部默认 640；可通过 `--threads`、`--batch`、`--imgsz` 调整。权重保存在 `models/`；训练结果保存在 `runs/<stage>/`，重复运行自动使用新目录。`weights/best.pt` 是验证集最优权重，`weights/last.pt` 是最后一轮权重。首次运行可能额外下载绘图字体。只有权重来自可信来源时才加载 `.pt` 文件。
+默认 CPU、8 个计算线程、batch=2、数据加载 workers=0。全图默认 1280，局部默认 640；可通过 `--threads`、`--batch`、`--imgsz` 调整。预训练权重下载到 `models/`；训练结果保存在 `runs/<stage>/`，重复运行自动使用新目录。`weights/best.pt` 是验证集最优权重，`weights/last.pt` 是最后一轮权重。首次运行可能额外下载绘图字体。只有权重来自可信来源时才加载 `.pt` 文件。
 
 快速检查环境而非训练可用模型：
 
@@ -114,21 +114,49 @@ python3 -m venv .venv
 .venv/bin/python train.py --stage state --epochs 1 --imgsz 320 --name smoke-state
 ```
 
-50 张合成样本训练出的权重只能检查管线，不能据此评价实际识别效果。ONNX 与 ONNX Runtime 在后续模型导出和部署时再安装，本阶段不需要。
+50 张合成样本训练出的权重只能检查管线，不能据此评价实际识别效果。
+
+## ONNX 导出
+
+部署镜像只使用 ONNX Runtime。训练完成后，在本地导出两个固定尺寸模型：
+
+```bash
+.venv/bin/python -m pip install -r requirements-export.txt
+.venv/bin/python export_onnx.py
+.venv/bin/python verify_onnx.py --split all
+```
+
+输出：
+
+```text
+models/onnx/widget.onnx      # 1×3×1280×1280
+models/onnx/state.onnx       # 1×3×640×640
+models/onnx/manifest.json
+```
+
+`manifest.json` 保存类别名、输入尺寸、opset 和导出信息。两个 ONNX 文件约 21 MB，已加入 `.gitignore` 白名单，随代码提交；重新训练后需要重新导出并提交更新。
+
+`verify_onnx.py` 会比较 torch 与 ONNX 的组件存在性、状态、组件框 IoU、复选框中心误差和延迟。默认只在组件存在性或中心命中出现差异时失败；`--strict-state` 会把状态差异也视为失败。
 
 ## 模型接入
 
-`cfbox_detector.py` 封装两阶段推理，`predict.py` 提供命令行入口。默认读取：
+`cfbox_detector.py` 支持 `torch` 和 `onnx` 两种后端。训练和本地评估默认使用 `runs/` 下的 `.pt`，服务默认使用 `models/onnx/`。
 
-```text
-runs/widget/weights/best.pt
-runs/state/weights/best.pt
-```
-
-单张截图：
+本地 torch 单张截图：
 
 ```bash
 .venv/bin/python predict.py --image datasets/demo/widget/images/test/sample_000041.png --json
+```
+
+ONNX 推理：
+
+```bash
+.venv/bin/python predict.py \
+  --backend onnx \
+  --widget-weights models/onnx/widget.onnx \
+  --state-weights models/onnx/state.onnx \
+  --image datasets/demo/widget/images/test/sample_000041.png \
+  --json
 ```
 
 批量截图并保存 JSON 与可视化结果：
@@ -145,7 +173,11 @@ Python 调用：
 ```python
 from cfbox_detector import CFChallengeDetector
 
-detector = CFChallengeDetector()
+detector = CFChallengeDetector(
+    "models/onnx/widget.onnx",
+    "models/onnx/state.onnx",
+    backend="onnx",
+)
 result = detector.predict("screenshot.png")
 print(result["has_cf_challenge"])
 print(result["state"])
@@ -166,13 +198,22 @@ print(result["checkbox_center_pct"])
 
 `unknown` 是保守结果：状态置信度不足、不同状态类别冲突、复选框框过于细长或中心越界时，不会猜测坐标。裁剪时固定外扩 8 像素，与生成训练裁剪的规则一致。
 
+ONNX 输入固定为 widget `1280×1280`、state `640×640`。大图会按比例缩小并填充，小图会按比例放大并填充，不会拉伸或直接裁剪；推理后再把坐标映射回原图。超过 `CFBOX_MAX_PIXELS` 的图片在解码阶段拒绝。
+
 ## 评估当前模型
 
 ```bash
+# ONNX，与部署环境一致
 .venv/bin/python evaluate.py \
+  --backend onnx \
+  --widget-weights models/onnx/widget.onnx \
+  --state-weights models/onnx/state.onnx \
   --split test \
   --overlay-dir overlays/test \
   --json-out reports/test-metrics.json
+
+# torch 基线
+.venv/bin/python evaluate.py --split test
 ```
 
 `--split` 可选 `train`、`val`、`test`、`all`。`all` 和 `train` 包含训练图片，结果不能当作独立测试。脚本计算：
@@ -184,20 +225,181 @@ print(result["checkbox_center_pct"])
 - 未勾选复选框中心命中率、像素误差和相对对角线误差。
 - 端到端完全正确率和 CPU 延迟。
 
-当前 50 轮训练权重的实测结果（合成数据）：
+当前 demo 的 50 轮训练结果统一放在文末的 [Demo 评估数据](#demo-评估数据50-张训练-50-轮)。
 
-| 数据 | 组件召回 | 无组件误报 | 组件 IoU | 状态 top-1 | 未勾选中心 |
-| --- | --- | --- | --- | --- | --- |
-| test，5 张 | 4/4 | 0/1 | 0.932 | 2/4 | 1/1，误差 0.42 px |
-| val，5 张 | 4/4 | 0/1 | 0.969 | 2/4 | 1/1，误差 0.47 px |
-| all，50 张 | 40/40 | 0/10 | 0.948 | 18/40 | 10/10，误差 0.48 px |
+## Docker HTTP 服务
 
-组件检测和复选框定位已经可用；**状态识别目前不可用**。典型错误是 `verified`、`processing` 被判为 `unknown`，以及 `processing` 被判为 `unchecked`。测试集只有 5 张，这些比例没有统计意义。
+`app.py` 提供 FastAPI 接口，`Dockerfile` 构建 ONNX-only CPU 镜像。镜像默认自带 `models/onnx/`，不安装 torch、torchvision、Ultralytics 或 OpenCV。实测镜像大小约 **350 MB**。
 
-注意状态模型的 YOLO mAP 仍可能很高，因为不同状态框高度重叠，mAP 不能反映互斥状态的 top-1 分类能力。应以状态准确率、混淆矩阵和端到端完全正确率为准。下一步应把数据扩到至少数百张，并覆盖真实截图；若状态排序仍然混淆，建议改用“裁剪图单标签分类 + 复选框检测”的双头方案，而不是继续只调检测阈值。
+### 启动
 
 ```bash
-python3 -m unittest -v
+cp .env.example .env
+# 建议在 .env 中设置 CFBOX_API_KEY
+docker compose up --build -d
+docker compose ps
+docker compose logs -f cfbox-api
+```
+
+默认监听 `http://localhost:8000`。构建只下载 FastAPI、ONNX Runtime、NumPy、Pillow 等依赖，不再下载 196 MB PyTorch。如果 `docker compose up --build` 的构建容器无法解析域名，先手动构建再启动：
+
+```bash
+docker build --network=host -t cfbox-api:latest .
+docker compose up -d
+```
+
+构建不依赖本机 pip 缓存或本地 wheelhouse。
+
+ONNX 模型已随镜像复制到 `/models/onnx`。需要覆盖模型时挂载目录：
+
+```bash
+docker run \
+  -v /path/to/my-models:/models/onnx:ro \
+  -p 8000:8000 \
+  cfbox-api:latest
+```
+
+也可以在 `docker-compose.yml` 中取消 `volumes` 注释。挂载目录必须包含 `widget.onnx`、`state.onnx` 和 `manifest.json`。启动时会校验文件、类别名和输入尺寸，不匹配会直接失败；`/ready` 在模型加载完成前返回 503。
+
+### 接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/health` | 存活检查，不需要鉴权 |
+| GET | `/ready` | 模型是否加载完成 |
+| GET | `/info` | 后端、模型路径、阈值、限制和鉴权状态 |
+| POST | `/predict` | multipart 上传字段 `image` |
+| GET | `/docs` | OpenAPI 交互文档 |
+
+设置 `CFBOX_API_KEY` 后，`/predict` 支持：
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/ready
+curl -s http://localhost:8000/info
+
+curl -s \
+  -H "X-API-Key: $CFBOX_API_KEY" \
+  -F "image=@screenshot.png" \
+  http://localhost:8000/predict | python3 -m json.tool
+```
+
+也支持 `Authorization: Bearer <key>`。未设置 `CFBOX_API_KEY` 时不鉴权，只适合可信内网。对外部署应放在 TLS 反向代理后，并限制请求频率。
+
+响应在原有检测结果上增加 `request_id`：
+
+```json
+{
+  "request_id": "a1b2c3...",
+  "has_cf_challenge": true,
+  "state": "unchecked",
+  "confidence": 0.9957,
+  "checkbox_center_pct": {"x": 57.14, "y": 46.62},
+  "ambiguous": false,
+  "image_size": [800, 800],
+  "timing_ms": {"widget": 203.4, "state": 28.4, "total": 231.9}
+}
+```
+
+常见错误：`401` 鉴权失败，`400 invalid_image` 图片无法解析，`413 image_too_large` 超过上传或像素限制，`503 not_ready` 模型尚未加载，`500 inference_failed` 推理异常。
+
+### 配置和限制
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `CFBOX_BACKEND` | `onnx` | 镜像只安装 ONNX 依赖 |
+| `CFBOX_WIDGET_WEIGHTS` | `/models/onnx/widget.onnx` | 组件模型 |
+| `CFBOX_STATE_WEIGHTS` | `/models/onnx/state.onnx` | 状态模型 |
+| `CFBOX_MODEL_MANIFEST` | `/models/onnx/manifest.json` | 类别和输入尺寸 |
+| `CFBOX_API_KEY` | 空 | 为空时关闭鉴权 |
+| `CFBOX_THREADS` | `8` | ONNX Runtime intra-op 线程数 |
+| `CFBOX_CONF_WIDGET` | `0.25` | 组件置信度阈值 |
+| `CFBOX_CONF_STATE` | `0.25` | 状态置信度阈值 |
+| `CFBOX_CONFLICT_MARGIN` | `0.15` | 状态类别冲突阈值 |
+| `CFBOX_IOU` | `0.7` | NMS IoU 阈值 |
+| `CFBOX_MAX_UPLOAD_MB` | `10` | 单个上传大小上限 |
+| `CFBOX_MAX_PIXELS` | `50000000` | 解码后的像素上限 |
+
+输入尺寸由 `manifest.json` 固定，服务不提供运行时改尺寸。需要 1920 输入时重新导出 ONNX 并更新 manifest。
+
+服务固定单进程，ONNX Runtime 会话复用，推理请求串行执行，避免 CPU 线程过订阅。需要更高吞吐时应部署多个容器实例，而不是把 `--workers` 调大。
+
+更新自包含模型：
+
+```bash
+# 替换 models/onnx/ 下的 widget.onnx、state.onnx、manifest.json
+docker compose up --build -d
+curl -s http://localhost:8000/ready
+```
+
+## 许可证
+
+本项目采用 **GNU Affero General Public License v3.0**，见 [`LICENSE`](LICENSE)。
+
+第三方组件、训练/导出依赖以及由 Ultralytics 训练并导出的 ONNX 模型说明，见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
+Ultralytics YOLO 默认使用 AGPL-3.0，其官方说明也把训练模型纳入 AGPL 范围。商业、闭源或 SaaS 部署前，请确认 AGPL 义务或获取 Ultralytics Enterprise License。
+
+## Demo 评估数据（50 张，训练 50 轮）
+
+以下数据只用于验证训练、导出和部署管线，**不是真实场景 benchmark**。
+
+### 数据与训练配置
+
+| 项目 | 配置 |
+| --- | --- |
+| 数据集 | `datasets/demo`，50 张合成截图 |
+| 划分 | train 40 / val 5 / test 5 |
+| 状态分布 | absent、unchecked、verified、processing、error 各 10 张 |
+| widget 模型 | YOLO11n，50 epochs，`imgsz=1280`，CPU |
+| state 模型 | YOLO11n，50 epochs，`imgsz=640`，CPU |
+| 部署模型 | ONNX，opset 17，FP32，固定输入尺寸 |
+
+### ONNX 检测结果
+
+| 数据 | 组件召回 | 无组件误报 | 组件 IoU | 状态 top-1 | 中心命中 | 中心误差 | 端到端完全正确 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| test，5 张 | 4/4 | 0/1 | 0.928 | 2/4 | 1/1 | 0.38 px | 3/5 |
+| all，50 张 | 40/40 | 0/10 | 0.950 | 20/40 | 10/10 | 0.51 px | 30/50 |
+
+test 只有 5 张，比例没有统计意义；`all` 包含训练图片，也不是独立测试集。
+
+### 状态混淆矩阵（all，50 张）
+
+| GT \ Pred | unchecked | verified | processing | error | unknown |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| verified | 0 | 0 | 0 | 0 | 10 |
+| processing | 0 | 2 | 0 | 0 | 8 |
+| error | 0 | 0 | 0 | 8 | 2 |
+
+`unchecked` 10/10 正确，`absent` 10/10 正确；`verified` 全部无法确定，`processing` 多数无法确定。
+
+### torch / ONNX 一致性（all，50 张）
+
+| 指标 | 结果 |
+| --- | --- |
+| 组件存在性差异 | 0/50 |
+| 状态差异 | 5/50，边界样本 |
+| 组件框 IoU | 0.980 |
+| 复选框中心 L1 误差 | 0.259 px |
+| 中心命中失败 | 0 |
+
+### 解读
+
+- 组件检测和未勾选复选框定位已经可用。
+- **状态识别目前不可用**：`verified`、`processing` 经常返回 `unknown`，原因是 50 张数据太少，且不同状态的检测框高度重叠。
+- 状态模型的 YOLO mAP 可能不低，但 mAP 不能反映互斥状态的 top-1 分类能力，应以状态准确率和混淆矩阵为准。
+- 下一步应扩充到数百张并加入真实截图；若状态仍然混淆，建议改为“裁剪图单标签分类 + 复选框检测”的双头方案。
+
+### 复现
+
+```bash
+.venv/bin/python -m unittest -v
+.venv/bin/python evaluate.py --backend onnx \
+  --widget-weights models/onnx/widget.onnx \
+  --state-weights models/onnx/state.onnx \
+  --split all
+.venv/bin/python verify_onnx.py --split all
 ```
 
 CPU 全图训练可能耗时较长。检查真实截图上的组件召回率、状态混淆和中心点命中率，再决定是否扩大训练。

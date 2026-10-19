@@ -1,0 +1,41 @@
+services:
+  cfbox-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cfbox-api:latest
+    init: true
+    ports:
+      - "${CFBOX_PORT:-8000}:8000"
+    environment:
+      CFBOX_BACKEND: onnx
+      CFBOX_WIDGET_WEIGHTS: /models/onnx/widget.onnx
+      CFBOX_STATE_WEIGHTS: /models/onnx/state.onnx
+      CFBOX_MODEL_MANIFEST: /models/onnx/manifest.json
+      CFBOX_THREADS: "${CFBOX_THREADS:-8}"
+      CFBOX_CONF_WIDGET: "${CFBOX_CONF_WIDGET:-0.25}"
+      CFBOX_CONF_STATE: "${CFBOX_CONF_STATE:-0.25}"
+      CFBOX_CONFLICT_MARGIN: "${CFBOX_CONFLICT_MARGIN:-0.15}"
+      CFBOX_IOU: "${CFBOX_IOU:-0.7}"
+      CFBOX_API_KEY: "${CFBOX_API_KEY:-}"
+      CFBOX_MAX_UPLOAD_MB: "${CFBOX_MAX_UPLOAD_MB:-10}"
+      CFBOX_MAX_PIXELS: "${CFBOX_MAX_PIXELS:-50000000}"
+      CFBOX_LOG_LEVEL: "${CFBOX_LOG_LEVEL:-INFO}"
+    # Optional: replace the baked-in models without rebuilding.
+    # volumes:
+    #   - ./my-models:/models/onnx:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3

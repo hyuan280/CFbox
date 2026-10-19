@@ -1,0 +1,42 @@
+{
+  "format": "onnx",
+  "opset": 17,
+  "exported_at": "2026-10-19T02:11:24.524930+00:00",
+  "widget": {
+    "file": "widget.onnx",
+    "imgsz": 1280,
+    "names": {
+      "0": "cf_widget"
+    },
+    "ultralytics_version": "8.4.178",
+    "runtime": {
+      "input": "images",
+      "output": "output0",
+      "output_shape": [
+        1,
+        5,
+        33600
+      ]
+    }
+  },
+  "state": {
+    "file": "state.onnx",
+    "imgsz": 640,
+    "names": {
+      "0": "checkbox_unchecked",
+      "1": "state_verified",
+      "2": "state_processing",
+      "3": "state_error"
+    },
+    "ultralytics_version": "8.4.178",
+    "runtime": {
+      "input": "images",
+      "output": "output0",
+      "output_shape": [
+        1,
+        8,
+        8400
+      ]
+    }
+  }
+}

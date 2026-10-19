@@ -85,7 +85,8 @@ def evaluate(args):
         args.widget_weights, args.state_weights,
         imgsz_widget=args.imgsz_widget, imgsz_state=args.imgsz_state,
         conf_widget=args.conf_widget, conf_state=args.conf_state,
-        threads=args.threads, conflict_margin=args.conflict_margin)
+        threads=args.threads, conflict_margin=args.conflict_margin,
+        backend=args.backend, manifest=args.manifest, iou=args.iou)
     if args.overlay_dir:
         args.overlay_dir.mkdir(parents=True, exist_ok=True)
 
@@ -253,13 +254,15 @@ def evaluate(args):
         'config': {
             'dataset': str(args.dataset),
             'split': args.split,
+            'backend': detector.backend,
             'widget_weights': str(args.widget_weights),
             'state_weights': str(args.state_weights),
             'conf_widget': args.conf_widget,
             'conf_state': args.conf_state,
-            'imgsz_widget': args.imgsz_widget,
-            'imgsz_state': args.imgsz_state,
+            'imgsz_widget': detector.imgsz_widget,
+            'imgsz_state': detector.imgsz_state,
             'conflict_margin': args.conflict_margin,
+            'iou': args.iou,
         },
         'metrics': metrics,
         'confusion_end_to_end': matrix_json(RESULT_STATES, RESULT_STATES, e2e_matrix),
@@ -311,10 +314,13 @@ def main():
                         default=ROOT / 'runs/state/weights/best.pt')
     parser.add_argument('--conf-widget', type=float, default=0.25)
     parser.add_argument('--conf-state', type=float, default=0.25)
-    parser.add_argument('--imgsz-widget', type=int, default=1280)
-    parser.add_argument('--imgsz-state', type=int, default=640)
+    parser.add_argument('--imgsz-widget', type=int)
+    parser.add_argument('--imgsz-state', type=int)
     parser.add_argument('--conflict-margin', type=float, default=0.15)
     parser.add_argument('--threads', type=int, default=8)
+    parser.add_argument('--backend', choices=['auto', 'onnx', 'torch'], default='auto')
+    parser.add_argument('--manifest', type=Path)
+    parser.add_argument('--iou', type=float, default=0.7)
     parser.add_argument('--limit', type=int)
     parser.add_argument('--overlay-dir', type=Path)
     parser.add_argument('--json-out', type=Path)

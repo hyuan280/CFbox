@@ -7,6 +7,7 @@ the widget crop and, for the unchecked state, locates the checkbox.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
 import os
 from pathlib import Path
@@ -122,43 +123,92 @@ def annotate_result(image: Image.Image, result: dict[str, Any]) -> Image.Image:
 class CFChallengeDetector:
     def __init__(self, widget_weights: str | Path = ROOT / 'runs/widget/weights/best.pt',
                  state_weights: str | Path = ROOT / 'runs/state/weights/best.pt',
-                 *, imgsz_widget: int = 1280, imgsz_state: int = 640,
+                 *, imgsz_widget: int | None = None, imgsz_state: int | None = None,
                  conf_widget: float = 0.25, conf_state: float = 0.25,
                  device: str = 'cpu', threads: int = 8, max_det: int = 20,
                  crop_margin: int = 8, conflict_margin: float = 0.15,
-                 checkbox_aspect_range: tuple[float, float] = (0.5, 2.0)):
+                 checkbox_aspect_range: tuple[float, float] = (0.5, 2.0),
+                 backend: str = 'auto', manifest: str | Path | None = None,
+                 iou: float = 0.7):
         if not 0 <= conf_widget <= 1 or not 0 <= conf_state <= 1:
             raise ValueError('Confidence thresholds must be between 0 and 1')
-        if not 0 <= conflict_margin <= 1:
-            raise ValueError('conflict_margin must be between 0 and 1')
-        if min(imgsz_widget, imgsz_state, threads, max_det) < 1 or crop_margin < 0:
+        if not 0 <= conflict_margin <= 1 or not 0 <= iou <= 1:
+            raise ValueError('IoU and conflict margins must be between 0 and 1')
+        if min(threads, max_det) < 1 or crop_margin < 0:
             raise ValueError('Sizes and thread count must be positive')
+        for value in (imgsz_widget, imgsz_state):
+            if value is not None and value < 1:
+                raise ValueError('Image sizes must be positive')
         if not 0 < checkbox_aspect_range[0] <= checkbox_aspect_range[1]:
             raise ValueError('checkbox_aspect_range must be positive and ordered')
+        if backend not in {'auto', 'onnx', 'torch'}:
+            raise ValueError(f'Unsupported backend: {backend}')
         widget_path, state_path = Path(widget_weights), Path(state_weights)
         for path in (widget_path, state_path):
             if not path.is_file():
                 raise FileNotFoundError(f'Weights not found: {path}')
-        import torch
-        from ultralytics import YOLO, settings
-        settings.update({'sync': False})
-        torch.set_num_threads(int(threads))
-        self.widget_model = YOLO(str(widget_path))
-        self.state_model = YOLO(str(state_path))
-        names = {int(k): str(v) for k, v in self.widget_model.names.items()}
-        widget_ids = [idx for idx, name in names.items() if name == 'cf_widget']
+        if backend == 'auto':
+            suffixes = {widget_path.suffix.lower(), state_path.suffix.lower()}
+            if suffixes == {'.onnx'}:
+                backend = 'onnx'
+            elif suffixes == {'.pt'}:
+                backend = 'torch'
+            else:
+                raise ValueError('Widget and state weights must both be .onnx or both be .pt')
+        if backend == 'onnx':
+            manifest_path = (Path(manifest) if manifest
+                             else widget_path.parent / 'manifest.json')
+            if not manifest_path.is_file():
+                raise FileNotFoundError(f'ONNX manifest not found: {manifest_path}')
+            try:
+                data = json.loads(manifest_path.read_text())
+                widget_info, state_info = data['widget'], data['state']
+                widget_names = {int(key): str(value)
+                                for key, value in widget_info['names'].items()}
+                state_names = {int(key): str(value)
+                               for key, value in state_info['names'].items()}
+                widget_imgsz, state_imgsz = int(widget_info['imgsz']), int(state_info['imgsz'])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f'Invalid ONNX manifest: {manifest_path}') from exc
+            if imgsz_widget is not None and int(imgsz_widget) != widget_imgsz:
+                raise ValueError(f'Widget manifest uses imgsz={widget_imgsz}, '
+                                 f'but imgsz_widget={imgsz_widget}')
+            if imgsz_state is not None and int(imgsz_state) != state_imgsz:
+                raise ValueError(f'State manifest uses imgsz={state_imgsz}, '
+                                 f'but imgsz_state={imgsz_state}')
+            from backends import create_backend
+            self.widget_backend = create_backend(
+                widget_path, 'onnx', widget_imgsz, threads, device, max_det, iou,
+                names=widget_names)
+            self.state_backend = create_backend(
+                state_path, 'onnx', state_imgsz, threads, device, max_det, iou,
+                names=state_names)
+            self.manifest = data
+        else:
+            widget_imgsz = imgsz_widget or 1280
+            state_imgsz = imgsz_state or 640
+            from backends import create_backend
+            self.widget_backend = create_backend(
+                widget_path, 'torch', widget_imgsz, threads, device, max_det, iou)
+            self.state_backend = create_backend(
+                state_path, 'torch', state_imgsz, threads, device, max_det, iou)
+            widget_names = self.widget_backend.names
+            state_names = self.state_backend.names
+            self.manifest = None
+        widget_ids = [idx for idx, name in widget_names.items() if name == 'cf_widget']
         if len(widget_ids) != 1:
             raise ValueError('Widget model must contain exactly one cf_widget class')
         self.widget_class = widget_ids[0]
         self.state_by_class = {}
-        for class_id, name in self.state_model.names.items():
+        for class_id, name in state_names.items():
             if name not in MODEL_STATE_NAMES:
                 raise ValueError(f'Unexpected state class: {name}')
             self.state_by_class[int(class_id)] = MODEL_STATE_NAMES[name]
         if set(self.state_by_class.values()) != set(MODEL_STATE_NAMES.values()):
             raise ValueError('State model must contain all four state classes')
-        self.imgsz_widget = imgsz_widget
-        self.imgsz_state = imgsz_state
+        self.backend = backend
+        self.imgsz_widget = widget_imgsz
+        self.imgsz_state = state_imgsz
         self.conf_widget = conf_widget
         self.conf_state = conf_state
         self.device = device
@@ -166,6 +216,7 @@ class CFChallengeDetector:
         self.crop_margin = crop_margin
         self.conflict_margin = conflict_margin
         self.checkbox_aspect_range = checkbox_aspect_range
+        self.iou = iou
 
     @staticmethod
     def _as_image(source: str | Path | Image.Image | Any) -> Image.Image:
@@ -179,25 +230,15 @@ class CFChallengeDetector:
         except Exception as exc:
             raise TypeError('Image must be a path, PIL image, or numpy array') from exc
 
-    def _predict_boxes(self, image: Image.Image, model: Any, imgsz: int, conf: float,
+    def _predict_boxes(self, image: Image.Image, backend: Any, conf: float,
                        classes: list[int]) -> list[Detection]:
-        result = model.predict(source=image, imgsz=imgsz, conf=conf, iou=0.7,
-                               device=self.device, verbose=False,
-                               max_det=self.max_det, augment=False,
-                               classes=classes)[0]
-        detections = []
-        if result.boxes is None:
-            return detections
-        for box in result.boxes:
-            detections.append(Detection(int(box.cls[0].item()), float(box.conf[0].item()),
-                                        tuple(float(v) for v in box.xyxy[0].tolist())))
-        return detections
+        return backend.detect(image, conf, classes)
 
     def predict_state(self, image: str | Path | Image.Image) -> dict[str, Any]:
         """Run only the state model on an already-cropped widget image."""
         crop = self._as_image(image)
         started = time.perf_counter()
-        detections = self._predict_boxes(crop, self.state_model, self.imgsz_state,
+        detections = self._predict_boxes(crop, self.state_backend,
                                          self.conf_state, sorted(self.state_by_class))
         detections = [d for d in detections
                       if self.state_by_class[d.class_id] != 'unchecked'
@@ -219,9 +260,8 @@ class CFChallengeDetector:
         source = self._as_image(image)
         width, height = source.size
         started = time.perf_counter()
-        widget_detections = self._predict_boxes(source, self.widget_model,
-                                                self.imgsz_widget, self.conf_widget,
-                                                [self.widget_class])
+        widget_detections = self._predict_boxes(source, self.widget_backend,
+                                                self.conf_widget, [self.widget_class])
         widget_ms = (time.perf_counter() - started) * 1000
         if not widget_detections:
             return {

@@ -1,10 +1,15 @@
 __pycache__/
 *.py[cod]
+*.swp
+*.swo
+docker-compose.override.yml
 .venv/
 /datasets/*
 !/datasets/demo/
 *.cache
-models/
+models/*
+!models/onnx/
+!models/onnx/**
 runs/
 .ultralytics/
 overlays/
@@ -12,4 +17,6 @@ results/
 reports/
 *.pt
 *.onnx
+!models/onnx/*.onnx
+.env
 .DS_Store
