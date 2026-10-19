@@ -1,0 +1,37 @@
+{
+  "state": "error",
+  "family": "checkout",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "widget": [
+    981,
+    465,
+    1252.3999938964844,
+    524.7166595458984
+  ],
+  "checkbox": null,
+  "seed": 4249970407,
+  "source": "synthetic",
+  "split": "val",
+  "image_size": [
+    1440,
+    900
+  ],
+  "widget_pixels": [
+    981.0,
+    465.0,
+    1252.3999938964844,
+    524.7166595458984
+  ],
+  "checkbox_pixels": null,
+  "has_cf_challenge": true,
+  "checkbox_center_pct": null,
+  "crop_pixels": [
+    973,
+    457,
+    1261,
+    533
+  ]
+}

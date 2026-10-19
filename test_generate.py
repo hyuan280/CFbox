@@ -22,6 +22,9 @@ class DatasetTests(unittest.TestCase):
             initialize(root)
             with self.assertRaises(FileExistsError):
                 initialize(root)
+            config = (root / 'widget/data.yaml').read_text()
+            self.assertNotIn('path:', config)
+            self.assertIn('train: images/train', config)
             buffer = io.BytesIO()
             Image.new('RGB', (400, 200), 'white').save(buffer, format='PNG')
             annotation = {'state': 'unchecked', 'family': 'portal',

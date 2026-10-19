@@ -127,7 +127,7 @@ def initialize(output):
         for split in FAMILIES:
             for kind in ['images', 'labels']:
                 (output / stage / kind / split).mkdir(parents=True)
-        config = f'path: {json.dumps(str(output / stage))}\ntrain: images/train\nval: images/val\ntest: images/test\nnames:\n'
+        config = 'train: images/train\nval: images/val\ntest: images/test\nnames:\n'
         config += ''.join(f'  {i}: {name}\n' for i, name in enumerate(names))
         (output / stage / 'data.yaml').write_text(config)
     (output / 'metadata').mkdir()

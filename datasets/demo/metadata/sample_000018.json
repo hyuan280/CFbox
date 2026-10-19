@@ -1,0 +1,21 @@
+{
+  "state": "absent",
+  "family": "dashboard",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "widget": null,
+  "checkbox": null,
+  "seed": 825873197,
+  "source": "synthetic",
+  "split": "train",
+  "image_size": [
+    1280,
+    720
+  ],
+  "widget_pixels": null,
+  "checkbox_pixels": null,
+  "has_cf_challenge": false,
+  "checkbox_center_pct": null
+}

@@ -1,0 +1,37 @@
+{
+  "state": "error",
+  "family": "article",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "widget": [
+    723,
+    492,
+    1064.2666625976562,
+    567.0833282470703
+  ],
+  "checkbox": null,
+  "seed": 415393688,
+  "source": "synthetic",
+  "split": "train",
+  "image_size": [
+    1920,
+    1080
+  ],
+  "widget_pixels": [
+    723.0,
+    492.0,
+    1064.2666625976562,
+    567.0833282470703
+  ],
+  "checkbox_pixels": null,
+  "has_cf_challenge": true,
+  "checkbox_center_pct": null,
+  "crop_pixels": [
+    715,
+    484,
+    1073,
+    576
+  ]
+}

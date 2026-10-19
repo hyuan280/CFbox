@@ -1,0 +1,37 @@
+{
+  "state": "processing",
+  "family": "portal",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "widget": [
+    1468,
+    654,
+    1808.5166625976562,
+    728.9166717529297
+  ],
+  "checkbox": null,
+  "seed": 1929338155,
+  "source": "synthetic",
+  "split": "train",
+  "image_size": [
+    1920,
+    1080
+  ],
+  "widget_pixels": [
+    1468.0,
+    654.0,
+    1808.5166625976562,
+    728.9166717529297
+  ],
+  "checkbox_pixels": null,
+  "has_cf_challenge": true,
+  "checkbox_center_pct": null,
+  "crop_pixels": [
+    1460,
+    646,
+    1817,
+    737
+  ]
+}

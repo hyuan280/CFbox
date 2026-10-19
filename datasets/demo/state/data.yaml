@@ -1,0 +1,8 @@
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: checkbox_unchecked
+  1: state_verified
+  2: state_processing
+  3: state_error

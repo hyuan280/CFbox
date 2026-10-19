@@ -1,0 +1,21 @@
+{
+  "state": "absent",
+  "family": "settings",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "widget": null,
+  "checkbox": null,
+  "seed": 3620021414,
+  "source": "synthetic",
+  "split": "test",
+  "image_size": [
+    1280,
+    720
+  ],
+  "widget_pixels": null,
+  "checkbox_pixels": null,
+  "has_cf_challenge": false,
+  "checkbox_center_pct": null
+}

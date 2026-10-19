@@ -1,0 +1,21 @@
+{
+  "state": "absent",
+  "family": "article",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "widget": null,
+  "checkbox": null,
+  "seed": 2592983556,
+  "source": "synthetic",
+  "split": "train",
+  "image_size": [
+    1920,
+    1080
+  ],
+  "widget_pixels": null,
+  "checkbox_pixels": null,
+  "has_cf_challenge": false,
+  "checkbox_center_pct": null
+}

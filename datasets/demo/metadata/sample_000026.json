@@ -1,0 +1,37 @@
+{
+  "state": "error",
+  "family": "dashboard",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "widget": [
+    980,
+    462,
+    1247.75,
+    520.8999938964844
+  ],
+  "checkbox": null,
+  "seed": 4022900810,
+  "source": "synthetic",
+  "split": "train",
+  "image_size": [
+    1280,
+    720
+  ],
+  "widget_pixels": [
+    980.0,
+    462.0,
+    1247.75,
+    520.8999938964844
+  ],
+  "checkbox_pixels": null,
+  "has_cf_challenge": true,
+  "checkbox_center_pct": null,
+  "crop_pixels": [
+    972,
+    454,
+    1256,
+    529
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "state": "processing",
+  "family": "settings",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "widget": [
+    482,
+    411,
+    836.4833374023438,
+    488.98333740234375
+  ],
+  "checkbox": null,
+  "seed": 438989806,
+  "source": "synthetic",
+  "split": "test",
+  "image_size": [
+    1280,
+    720
+  ],
+  "widget_pixels": [
+    482.0,
+    411.0,
+    836.4833374023438,
+    488.98333740234375
+  ],
+  "checkbox_pixels": null,
+  "has_cf_challenge": true,
+  "checkbox_center_pct": null,
+  "crop_pixels": [
+    474,
+    403,
+    845,
+    497
+  ]
+}
