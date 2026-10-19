@@ -42,10 +42,12 @@ under a separate Enterprise License. See:
 ## Model artifacts
 
 `models/onnx/widget.onnx` and `models/onnx/state.onnx` were exported from
-YOLO11n detection weights trained with Ultralytics YOLO. Ultralytics' public
-licensing FAQ states that trained models are covered by AGPL-3.0. If you
-distribute these model artifacts or a container containing them, comply with
-AGPL-3.0 or obtain an Ultralytics Enterprise License.
+YOLO11n detection weights trained with Ultralytics YOLO. The corresponding
+PyTorch checkpoints are tracked at `runs/widget/weights/best.pt` and
+`runs/state/weights/best.pt`. Ultralytics' public licensing FAQ states that
+trained models are covered by AGPL-3.0. If you distribute these model artifacts
+or a container containing them, comply with AGPL-3.0 or obtain an Ultralytics
+Enterprise License.
 
 `models/onnx/manifest.json` records the Ultralytics version, opset, input
 sizes, class names, and export time for traceability.

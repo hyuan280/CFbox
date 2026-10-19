@@ -136,6 +136,15 @@ models/onnx/manifest.json
 
 `manifest.json` 保存类别名、最大输入尺寸、opset 和导出信息。两个 ONNX 文件约 20 MB，已加入 `.gitignore` 白名单，随代码提交；重新训练后需要重新导出并提交更新。默认导出动态宽高；需要固定正方形输入时可使用 `export_onnx.py --no-dynamic`。
 
+用于导出的最终训练权重也已纳入 Git：
+
+```text
+runs/widget/weights/best.pt
+runs/state/weights/best.pt
+```
+
+`last.pt`、smoke 训练权重和其他运行产物仍然不提交。
+
 `verify_onnx.py` 会比较 torch 与 ONNX 的组件存在性、状态、组件框 IoU、复选框中心误差和延迟。默认只在组件存在性或中心命中出现差异时失败；`--strict-state` 会把状态差异也视为失败。
 
 ## 模型接入
