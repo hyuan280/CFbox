@@ -1,9 +1,6 @@
 services:
   cfbox-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: cfbox-api:latest
+    image: ghcr.io/hyuan280/cfbox:latest
     init: true
     ports:
       - "${CFBOX_PORT:-8000}:8000"
