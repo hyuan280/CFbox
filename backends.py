@@ -164,7 +164,11 @@ class TorchBackend:
         from ultralytics import YOLO, settings
 
         settings.update({'sync': False})
+        if hasattr(torch.backends, 'nnpack'):
+            torch.backends.nnpack.set_flags(False)
         torch.set_num_threads(int(threads))
+        if device in (None, 'auto'):
+            device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         self.model = YOLO(str(path))
         self.names = {int(key): str(value) for key, value in self.model.names.items()}
         self.imgsz = imgsz

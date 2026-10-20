@@ -1,3 +1,5 @@
--r requirements-train.txt
+# Install inside an existing training environment (requirements-train-cpu/gpu).
+-r requirements.txt
+ultralytics==8.4.178
 onnx>=1.12,<2
 onnxruntime==1.26.0

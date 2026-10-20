@@ -2,11 +2,14 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>Synthetic UI Dataset Studio</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font:15px Arial,sans-serif;background:var(--bg);color:var(--fg);overflow:hidden}header{height:76px;padding:24px 5%;border-bottom:1px solid #8884;display:flex;justify-content:space-between}main{padding:40px 6%;display:grid;grid-template-columns:2fr 1fr;gap:28px}.card{padding:28px;border:1px solid #8884;border-radius:10px;background:var(--panel)}h1{font-size:32px;margin:0 0 24px}p{line-height:1.7;opacity:.75}input{display:block;width:100%;padding:12px;margin:18px 0;border:1px solid #8886;background:transparent;color:inherit;border-radius:5px}button{padding:12px 24px;background:var(--accent);color:white;border:0;border-radius:5px}.bar{height:13px;background:#8883;margin:20px 0;border-radius:4px}.widget{position:fixed;display:flex;align-items:center;justify-content:space-between;width:300px;height:66px;padding:12px;border:1px solid #d0d0d0;background:#fafafa;color:#252525;font:14px Arial,sans-serif;transform-origin:top left;box-shadow:0 1px 3px #0001}.widget.dark{background:#232323;color:#eee;border-color:#555}.left{display:flex;align-items:center;gap:12px}.checkbox{width:25px;height:25px;border:2px solid #777;background:#fff}.mark{width:25px;height:25px;display:flex;align-items:center;justify-content:center;font-size:25px;color:#27995c}.spinner{width:23px;height:23px;border:3px solid #b7d4c1;border-top-color:#28925b;border-radius:50%}.error{color:#bd4141;font-size:24px;width:25px;text-align:center}.brand{text-align:center;font-size:9px;line-height:1.4}.cloud{color:#f49a37;font-size:29px;line-height:24px}.brand strong{display:block;font-size:10px}.legal{font-size:8px;color:#888}.decoy{position:fixed;padding:14px;background:var(--panel);border:1px solid #8885;border-radius:6px;display:flex;align-items:center;gap:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:10px 8px;border-bottom:1px solid #8883;text-align:left;vertical-align:middle}th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;opacity:.6}.muted{opacity:.6;font-size:11px}.status{display:inline-block;padding:3px 8px;border-radius:99px;background:#8882;font-size:11px}.list{display:flex;flex-direction:column;border:1px solid #8883;border-radius:8px}.list-item{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid #8883}.list-item:last-child{border-bottom:0}.avatar{width:30px;height:30px;border-radius:50%;background:#8883;flex:none}.list-main{flex:1;min-width:0}.list-main strong{display:block;font-size:13px}.list-main span{font-size:11px;opacity:.65}.stack{display:flex;flex-direction:column;gap:14px}.field{display:flex;flex-direction:column;gap:6px;font-size:12px}.field input,.field select{padding:9px;margin:0;border:1px solid #8886;background:transparent;color:inherit;border-radius:5px;font:inherit}.dialog{border:1px solid #8884;border-radius:10px;padding:20px;background:var(--panel);box-shadow:0 18px 50px #0003;max-width:460px;margin:10px auto}.dialog h2{margin:0 0 6px;font-size:18px}.dialog p{margin:0 0 14px;font-size:12px}.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tile{border:1px solid #8883;border-radius:8px;padding:12px;min-height:90px}.tile h3{margin:0 0 6px;font-size:13px}.tile p{margin:0;font-size:11px;opacity:.65}.sidebar-layout{display:grid;grid-template-columns:170px minmax(0,1fr);gap:14px}.side-nav{border-right:1px solid #8883;padding-right:12px;display:flex;flex-direction:column;gap:6px;font-size:12px}.side-nav b{margin-bottom:4px}.side-nav span{padding:7px 8px;border-radius:5px;background:#8881}.widget-slot{display:flex;align-items:center;justify-content:center;width:100%;margin:4px 0;min-height:76px}
+.header-right{display:flex;align-items:center;gap:10px}.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid #8885;border-radius:6px;background:var(--panel);color:inherit;font-size:15px;flex:none;box-shadow:0 1px 2px #0001}.icon-btn.square{border-radius:4px}.icon-btn.circle{border-radius:50%}.icon-btn.filled{background:var(--accent);color:#fff;border-color:transparent}.icon-btn.sm{width:26px;height:26px;font-size:12px}.radio{width:18px;height:18px;border:2px solid #777;border-radius:50%;display:inline-block;flex:none}.toggle{width:38px;height:20px;border-radius:99px;background:#8885;position:relative;display:inline-block;flex:none}.toggle:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 2px #0002}.status-dot{width:9px;height:9px;border-radius:50%;background:#2a9d5c;display:inline-block;flex:none}.row-actions{display:flex;align-items:center;gap:10px;margin:12px 0}.action-cell{display:flex;gap:6px;align-items:center}.avatar.square{border-radius:4px}.left span{white-space:nowrap}.real-mode header,.real-mode main,.real-mode .decoy,.real-mode .tools{display:none}body.real-mode{background-position:center;background-repeat:no-repeat;background-size:100% 100%}
 </style>
-<header><strong id="brand"></strong><span>Overview &nbsp; / &nbsp; Workspace &nbsp; / &nbsp; Account</span></header>
+<header><strong id="brand"></strong><div class="header-right"><span>Overview &nbsp; / &nbsp; Workspace &nbsp; / &nbsp; Account</span><span class="icon-btn sm">?</span><span class="icon-btn sm">+</span><span class="avatar square" style="width:28px;height:28px"></span></div></header>
 <main><section class="card"><h1 id="title"></h1><p id="intro"></p><div id="content"></div></section><aside class="card"><h2>Activity</h2><p>Recent updates and workspace information</p><div class="bar"></div><div class="bar" style="width:75%"></div><div class="bar" style="width:88%"></div><p>Manage your preferences and notifications.</p></aside></main>
 <script>
 const q=new URLSearchParams(location.search);
@@ -14,27 +17,95 @@ let seed=Number(q.get('seed')||1)>>>0;
 function random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
 function pick(xs){return xs[Math.floor(random()*xs.length)]}
 const family=q.get('family')||'portal';
+const real=q.get('real');
+const realMode=Boolean(real);
+if(realMode)document.body.classList.add('real-mode');
+const baseFamily=realMode?'real':family;
+const backgroundReady=realMode?new Promise((resolve,reject)=>{
+ const image=document.createElement('img');
+ image.alt='';
+ image.style.cssText='position:fixed;left:0;top:0;width:100%;height:100%;object-fit:fill;z-index:0;pointer-events:none';
+ image.onload=async()=>{
+  try{await image.decode()}catch(e){}
+  document.body.appendChild(image);
+  requestAnimationFrame(()=>requestAnimationFrame(resolve));
+ };
+ image.onerror=()=>reject(new Error('Failed to load real background: '+real));
+ image.src='/real/'+encodeURIComponent(real);
+}):Promise.resolve();
 const dark=random()<.5;
 document.documentElement.style.cssText=dark?'--bg:#121923;--fg:#e5e9f1;--panel:#1c2735;--accent:#426cc9':'--bg:#f3f5f8;--fg:#253042;--panel:#fff;--accent:#327b75';
-const titles={portal:'Access your workspace',article:'A practical guide to better systems',dashboard:'Workspace analytics',checkout:'Review your order',support:'How can we help?',settings:'Account preferences'};
+const titles={portal:'Access your workspace',article:'A practical guide to better systems',dashboard:'Workspace analytics',checkout:'Review your order',support:'How can we help?',settings:'Account preferences',table:'Project directory',list:'Team activity',form:'Create your account',dialog:'Confirm your session',sidebar:'Workspace settings',grid:'Workspace overview'};
 document.querySelector('#brand').textContent=pick(['Northstar','Fieldnotes','Atlas','Workbench']);
 document.querySelector('#title').textContent=titles[family]||titles.portal;
-document.querySelector('#intro').textContent=pick(['Keep your projects organized in one place.','Tools and resources for your everyday work.','Review the latest information before continuing.']);
-document.querySelector('#content').innerHTML=['portal','checkout','settings'].includes(family)?'<input placeholder="Email address"><input placeholder="Reference or password"><button>Continue</button>':'<p>Building reliable workflows starts with clear information and thoughtful defaults.</p>'+Array.from({length:7},()=>'<div class="bar" style="width:'+Math.round(40+random()*60)+'%"></div>').join('');
+const intros=['Keep your projects organized in one place.','Tools and resources for your everyday work.','Review the latest information before continuing.'];
+document.querySelector('#intro').textContent=pick(intros);
+const content=document.querySelector('#content');
+const rows=['Website redesign','Billing migration','Q4 planning','Support handbook'];
+const people=['Avery Chen','Mira Patel','Jon Bell','Ruth Okafor'];
+const decoyActions='<div class="row-actions"><span class="radio"></span><span class="icon-btn sm">?</span><span class="icon-btn sm">+</span><span class="toggle"></span><span class="status-dot"></span></div>';
+function tableContent(){
+ let html='<table><thead><tr><th>Project</th><th>Owner</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+ for(let i=0;i<4;i++)html+='<tr><td><strong>'+rows[i]+'</strong><div class="muted">Updated recently</div></td><td>'+people[i]+'</td><td><span class="status">'+(i%2?'Active':'Review')+'</span></td><td><div class="action-cell"><span class="checkbox" style="width:20px;height:20px"></span><span class="icon-btn sm">?</span></div></td></tr>';
+ html+='<tr><td colspan="4"><div id="widget-slot" class="widget-slot"></div></td></tr></tbody></table>';
+ content.innerHTML=html;
+}
+function listContent(){
+ let html='<div class="list">';
+ for(let i=0;i<4;i++)html+='<div class="list-item"><div class="avatar"></div><div class="list-main"><strong>'+people[i]+'</strong><span>'+(i%2?'Commented on ':'Updated ')+rows[i]+'</span></div><span class="icon-btn sm">?</span><span class="muted">'+(i+1)+'h</span></div>';
+ html+='<div class="list-item"><div class="list-main"><div id="widget-slot" class="widget-slot"></div></div></div></div>';
+ content.innerHTML=html;
+}
+function formContent(){
+ content.innerHTML='<div class="stack"><label class="field">Full name<input value="Avery Chen"></label><label class="field">Email address<input value="avery@example.com"></label><label class="field">Workspace<select><option>Northstar</option><option>Atlas</option></select></label>'+decoyActions+'<div id="widget-slot" class="widget-slot"></div><div class="actions"><button>Create account</button></div></div>';
+}
+function dialogContent(){
+ content.innerHTML='<div class="dialog"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Before you continue</h2><span class="icon-btn sm">×</span></div><p>Your session needs a quick verification before we save these changes.</p>'+decoyActions+'<div id="widget-slot" class="widget-slot"></div><div class="actions"><button style="background:#8884;color:inherit">Cancel</button><button>Continue</button></div></div>';
+}
+function sidebarContent(){
+ content.innerHTML='<div class="sidebar-layout"><div class="side-nav"><b>Workspace</b><span><span class="status-dot"></span> Overview</span><span>Members</span><span>Security</span><span>Billing</span></div><div><div class="bar" style="width:60%;margin:0 0 16px"></div><div class="bar" style="width:85%"></div><p>Review access, sessions and workspace policies.</p>'+decoyActions+'</div></div><div id="widget-slot" class="widget-slot"></div><div class="bar" style="width:70%"></div>';
+}
+function gridContent(){
+ content.innerHTML='<div class="grid"><div class="tile"><h3>Members</h3><p>18 active collaborators across 4 teams.</p>'+decoyActions+'</div><div class="tile"><h3>Storage</h3><p>64% of the workspace quota is in use.</p><div class="row-actions"><span class="checkbox" style="width:22px;height:22px"></span><span class="icon-btn sm">?</span><span class="toggle"></span></div></div><div class="tile" style="grid-column:1/-1"><h3>Security check</h3><div class="row-actions"><span class="radio"></span><span class="icon-btn sm">+</span><span class="icon-btn square sm">?</span><span class="status-dot"></span></div><div id="widget-slot" class="widget-slot"></div></div></div>';
+}
+const embedded=new Set(['table','list','form','dialog','sidebar','grid']);
+if(family==='table')tableContent();
+else if(family==='list')listContent();
+else if(family==='form')formContent();
+else if(family==='dialog')dialogContent();
+else if(family==='sidebar')sidebarContent();
+else if(family==='grid')gridContent();
+else if(['portal','checkout','settings'].includes(family))content.innerHTML='<input placeholder="Email address"><input placeholder="Reference or password"><button>Continue</button>'+decoyActions;
+else content.innerHTML='<p>Building reliable workflows starts with clear information and thoughtful defaults.</p>'+Array.from({length:6},()=>'<div class="bar" style="width:'+Math.round(40+random()*60)+'%"></div>').join('')+decoyActions;
 const state=q.get('state')||'unchecked';
 const english=random()<.5;
 const texts=english?{unchecked:'Verify you are human',verified:'Success!',processing:'Verifying...',error:'Verification expired'}:{unchecked:'\u786e\u8ba4\u60a8\u662f\u771f\u4eba',verified:'\u9a8c\u8bc1\u6210\u529f',processing:'\u6b63\u5728\u9a8c\u8bc1...',error:'\u9a8c\u8bc1\u5df2\u8fc7\u671f'};
 if(state!=='absent'){
- const scale=.8+random()*.65;
+ const isEmbedded=!realMode&&embedded.has(family);
+ const scale=isEmbedded?(.8+random()*.18):(.8+random()*.65);
+ const widgetWidth=Math.floor((isEmbedded?250:270)+random()*(isEmbedded?50:110));
+ const widgetHeight=Math.floor(66+random()*14);
  const widget=document.createElement('div');widget.id='cf-widget';widget.className='widget'+(random()<.5?' dark':'');
  const icons={unchecked:'<div id="checkbox" class="checkbox"></div>',verified:'<div class="mark">&#10003;</div>',processing:'<div class="spinner"></div>',error:'<div class="error">!</div>'};
  widget.innerHTML='<div class="left">'+icons[state]+'<span>'+texts[state]+'</span></div><div class="brand"><div class="cloud">&#9729;</div><strong>CLOUDFLARE</strong><div class="legal">Privacy &middot; Terms</div></div>';
- widget.style.zIndex='2';widget.style.transform='scale('+scale+')';
- widget.style.left=Math.floor(12+random()*Math.max(0,innerWidth-300*scale-24))+'px';
- widget.style.top=Math.floor(90+random()*Math.max(0,innerHeight-66*scale-106))+'px';
- document.body.append(widget);
+ widget.style.width=widgetWidth+'px';widget.style.height=widgetHeight+'px';
+ widget.style.transform='scale('+scale+')';
+ if(isEmbedded){
+  const slot=document.querySelector('#widget-slot');
+  widget.style.position='relative';widget.style.left='auto';widget.style.top='auto';widget.style.zIndex='1';widget.style.transformOrigin='center';widget.style.flex='0 0 auto';
+  slot.style.minHeight=Math.ceil(widgetHeight*scale+12)+'px';
+  slot.appendChild(widget);
+ }else{
+  widget.style.zIndex='2';
+  widget.style.left=Math.floor(12+random()*Math.max(0,innerWidth-widgetWidth*scale-24))+'px';
+  widget.style.top=Math.floor(90+random()*Math.max(0,innerHeight-widgetHeight*scale-106))+'px';
+  document.body.append(widget);
+ }
 }
-const decoy=document.createElement('div');decoy.className='decoy';decoy.style.left='6%';decoy.style.bottom='22px';decoy.innerHTML='<div class="checkbox"></div>'+pick(['Remember me','Accept the terms','Subscribe to updates']);document.body.append(decoy);
-document.fonts.ready.then(()=>{document.body.dataset.ready='true';document.body.dataset.state=state;document.body.dataset.family=family});
+if(!realMode){
+ const decoy=document.createElement('div');decoy.className='decoy';decoy.style.left='6%';decoy.style.bottom='22px';decoy.innerHTML='<div class="checkbox"></div><span class="icon-btn sm">?</span>'+pick(['Remember me','Accept the terms','Subscribe to updates'])+'<span class="toggle"></span>';document.body.append(decoy);
+ const tools=document.createElement('div');tools.className='tools';tools.style.cssText='position:fixed;right:18px;bottom:18px;display:flex;gap:8px;align-items:center;z-index:1';tools.innerHTML='<span class="icon-btn square">+</span><span class="icon-btn square">?</span><span class="radio"></span><span class="toggle"></span>';document.body.append(tools);
+}
+Promise.all([document.fonts.ready,backgroundReady]).then(()=>{document.body.dataset.ready='true';document.body.dataset.state=state;document.body.dataset.family=baseFamily});
 </script>
 </html>

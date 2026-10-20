@@ -1,0 +1,5 @@
+# GPU training dependencies shared by NVIDIA CUDA and AMD ROCm.
+# Torch wheels are vendor-specific: install torch/torchvision first from the
+# matching PyTorch index, then install this file. See README.md.
+-r requirements.txt
+ultralytics==8.4.178

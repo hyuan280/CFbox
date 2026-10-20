@@ -85,7 +85,8 @@ def evaluate(args):
         args.widget_weights, args.state_weights,
         imgsz_widget=args.imgsz_widget, imgsz_state=args.imgsz_state,
         conf_widget=args.conf_widget, conf_state=args.conf_state,
-        threads=args.threads, conflict_margin=args.conflict_margin,
+        device=args.device, threads=args.threads,
+        conflict_margin=args.conflict_margin,
         backend=args.backend, manifest=args.manifest, iou=args.iou)
     if args.overlay_dir:
         args.overlay_dir.mkdir(parents=True, exist_ok=True)
@@ -318,6 +319,8 @@ def main():
     parser.add_argument('--imgsz-state', type=int)
     parser.add_argument('--conflict-margin', type=float, default=0.15)
     parser.add_argument('--threads', type=int, default=8)
+    parser.add_argument('--device', default='auto',
+                        help="auto, cpu, cuda, cuda:0, 0, ... (default: auto)")
     parser.add_argument('--backend', choices=['auto', 'onnx', 'torch'], default='auto')
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--iou', type=float, default=0.7)

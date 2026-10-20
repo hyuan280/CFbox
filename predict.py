@@ -40,7 +40,8 @@ def main():
     parser.add_argument('--imgsz-widget', type=int)
     parser.add_argument('--imgsz-state', type=int)
     parser.add_argument('--threads', type=int, default=8)
-    parser.add_argument('--device', default='cpu')
+    parser.add_argument('--device', default='auto',
+                        help="auto, cpu, cuda, cuda:0, 0, ... (default: auto)")
     parser.add_argument('--backend', choices=['auto', 'onnx', 'torch'], default='auto')
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--iou', type=float, default=0.7)

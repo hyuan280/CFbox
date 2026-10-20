@@ -125,7 +125,7 @@ class CFChallengeDetector:
                  state_weights: str | Path = ROOT / 'runs/state/weights/best.pt',
                  *, imgsz_widget: int | None = None, imgsz_state: int | None = None,
                  conf_widget: float = 0.25, conf_state: float = 0.25,
-                 device: str = 'cpu', threads: int = 8, max_det: int = 20,
+                 device: str | None = 'auto', threads: int = 8, max_det: int = 20,
                  crop_margin: int = 8, conflict_margin: float = 0.15,
                  checkbox_aspect_range: tuple[float, float] = (0.5, 2.0),
                  backend: str = 'auto', manifest: str | Path | None = None,
@@ -211,7 +211,7 @@ class CFChallengeDetector:
         self.imgsz_state = state_imgsz
         self.conf_widget = conf_widget
         self.conf_state = conf_state
-        self.device = device
+        self.device = getattr(self.widget_backend, 'device', 'cpu')
         self.max_det = max_det
         self.crop_margin = crop_margin
         self.conflict_margin = conflict_margin

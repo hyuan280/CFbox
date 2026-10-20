@@ -1,6 +1,6 @@
 # CFbox
 
-使用本地 HTML/CSS 模拟验证组件，通过 **Camofox REST API** 访问页面、截取视口并读取 DOM 边界，自动导出两阶段 YOLO 数据集；另含 CPU 训练、ONNX 导出、两阶段推理、HTTP 服务和评估脚本。无需 Playwright 客户端或大模型。
+使用本地 HTML/CSS 模拟验证组件，通过 **Camofox REST API** 访问页面、截取视口并读取 DOM 边界，自动导出两阶段 YOLO 数据集；另含 CPU/GPU 训练、ONNX 导出、两阶段推理、HTTP 服务和评估脚本。无需 Playwright 客户端或大模型。
 
 这是合成数据生成器，不是验证破解工具。不访问真实挑战、不提交验证、不自动点击。模拟组件并非官方组件，合成集指标不能代表真实场景准确率。
 
@@ -19,7 +19,7 @@ python3 generate.py --count 50 --output datasets/demo
 python3 generate.py --count 1000 --seed 42 --output datasets/synthetic-v1
 ```
 
-输出目录必须尚不存在，避免旧数据残留或覆盖。失败的运行保留已采集文件，`run.json` 中状态为 `incomplete`；重新运行请换输出目录。脚本只关闭自己创建的独立用户会话。
+输出目录必须尚不存在，避免旧数据残留或覆盖。失败的运行保留已采集文件，`run.json` 中状态为 `incomplete`。用同一个 `--output` 加 `--resume` 可以继续，已完成的样本会跳过；Camofox 返回 500 或页面超时的样本会自动重试并重建标签页。`--retries` 和 `--retry-delay` 可调整重试次数和初始间隔。脚本只关闭自己创建的独立用户会话。
 
 认证通过环境变量 `CAMOFOX_API_KEY` 设置，不会写入数据集。服务地址可使用 `--api` 或 `CAMOFOX_URL`。
 
@@ -44,8 +44,45 @@ python3 generate.py --serve-only --port 8765
 浏览器打开 `http://localhost:8765/?seed=42&state=unchecked&family=portal`。
 
 - `state`：`unchecked`、`verified`、`processing`、`error`、`absent`。
-- `family`：`portal`、`article`、`dashboard`、`checkout`、`support`、`settings`。
+- `family`：`portal`、`article`、`dashboard`、`checkout`、`support`、`settings`、`table`、`list`、`form`、`dialog`、`sidebar`、`grid`。其中 `table`、`list`、`form`、`dialog`、`sidebar`、`grid` 会把组件嵌入表格、列表、表单、对话框、侧栏或卡片网格中。
 - `seed`：固定随机种子，可复现布局、语言、主题、缩放和位置选择；浏览器版本、字体和运行环境变化仍可能影响像素结果。
+
+## 真实背景合成
+
+可以把**不含 CF 组件**的真实截图作为背景，生成时随机叠加不同状态、尺寸和位置的挑战组件：
+
+```bash
+python3 generate.py \
+  --real-images real-backgrounds \
+  --count 2000 --seed 42 \
+  --output datasets/mixed-v1
+```
+
+`--real-images` 目录支持 PNG/JPG/JPEG/WebP/BMP，默认所有样本都使用真实背景。可用 `--real-ratio 0.5` 混合真实背景和纯合成页面。
+
+行为说明：
+
+- 真实截图会按 split 分区，避免同一背景同时出现在 train 和 test；图片少于 3 张时全部进入 train，val/test 回退到合成页面。
+- 视口尺寸按截图宽高比设置，默认最长边缩放到 1920，可用 `--real-max-size 0` 关闭。
+- 使用真实背景时会隐藏内置页面、干扰按钮和侧栏，只保留叠加的 CF 组件。
+- 元数据会记录 `source: real-background` 和 `background_image`，方便追踪来源。
+- 背景图本身不能包含 CF 挑战框，否则会产生重复组件和错误标注。
+- `--host 0.0.0.0` 会把该目录中的背景图暴露给网络，只应在可信网络使用。
+
+## 合并真实数据
+
+`import_real_dataset.py` 把 `hascf`、`nocf` 和已完成的生成集合并成 train/val/test 数据集：
+
+```bash
+python3 import_real_dataset.py \
+  --output datasets/real-v1 \
+  --hascf images/hascf \
+  --nocf images/nocf \
+  --extra datasets/gen-altcha datasets/gen-backgrounds datasets/gen-synthetic \
+  --seed 42
+```
+
+脚本会先完整校验所有标注、图片、state 裁剪和生成集的 `run.json`，全部通过后才在临时目录构建并替换目标目录；校验失败不会产生半成品。目标目录已存在时需要加 `--force`。生成集的 `run.json` 状态不是 `complete` 时不会合并。
 
 ## 输出结构
 
@@ -78,25 +115,42 @@ datasets/demo/
 
 ## 数据分布
 
-当前包含中英文文案、组件明暗主题、不同缩放与位置、四种视口和普通复选框干扰项。状态按固定计划轮换，约 20% 为无组件页面。布局家族按训练/验证/测试隔离，比例约 80/10/10；小样本集不保证每个集合覆盖全部状态，建议至少生成 50 张。
+当前包含中英文文案、组件明暗主题、不同宽度/高度/宽高比、不同缩放与位置、四种视口和大量干扰项：普通复选框、单选按钮、开关、方框图标按钮、圆形按钮、状态点和头像块。组件既可能独立浮动，也会嵌入表格、列表、表单、对话框、侧栏和卡片网格中。状态按固定计划轮换，约 20% 为无组件页面，这些页面同样包含干扰按钮，用于训练 widget 模型抑制误报。布局家族按训练/验证/测试隔离，比例约 80/10/10；小样本集不保证每个集合覆盖全部状态，建议至少生成 50 张。
 
 各家族仍共用部分 CSS 和组件模板，因此这种隔离只减少泄漏，并不证明跨真实网站泛化能力。页面是最小模拟，不是像素级真实复刻。应补充授权采集的真实截图，尤其是独立真实测试集、实际错误状态、多组件、遮挡、整页挑战和浏览器外框。当前生成器只生成完整可见的单组件样本，不覆盖这些情况。
 
 ## 测试与后续训练
 
-### 隔离 CPU 训练环境
+### 隔离训练环境
 
-当前机器已在 `.venv/` 安装 CPU 训练环境，不使用系统 Python 的包。新机器可执行：
+使用单独的虚拟环境，不污染系统 Python。CPU 环境：
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install torch==2.14.1+cpu torchvision==0.29.1+cpu --index-url https://download.pytorch.org/whl/cpu
-.venv/bin/python -m pip install -r requirements-train.txt
+.venv/bin/python -m pip install -r requirements-train-cpu.txt
 .venv/bin/python train.py --download-only
 ```
 
-需联网下载 CPU 版 PyTorch（约 196 MB）、torchvision、Ultralytics 及其依赖，和 YOLO11 nano 预训练权重（约 5 MB）。不需要 CUDA、GPU 驱动或本地大模型。环境占用与下载缓存需预留数 GB 空间。Ultralytics 使用 AGPL-3.0/商业许可，产品集成前请评估许可要求。
+GPU 环境先安装与显卡匹配的 PyTorch，再安装 `requirements-train-gpu.txt`（该文件不含 torch，避免覆盖厂商专用版本）。NVIDIA CUDA 示例：
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --index-url https://download.pytorch.org/whl/cu130
+.venv/bin/python -m pip install -r requirements-train-gpu.txt
+.venv/bin/python train.py --download-only
+```
+
+AMD ROCm 使用对应的 ROCm PyTorch 索引，其余步骤相同：
+
+```bash
+.venv/bin/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/rocmX.Y
+.venv/bin/python -m pip install -r requirements-train-gpu.txt
+```
+
+CUDA/ROCm 版本按本机驱动和 PyTorch 支持矩阵选择；驱动过旧时改用对应的 cu126/cu128 或 ROCm 版本索引。GPU 版 requirements 不能跨厂商通用，因为 torch/torchvision 必须来自 NVIDIA CUDA 或 AMD ROCm 各自的索引。需联网下载 PyTorch、torchvision、Ultralytics 及其依赖，和 YOLO11 nano 预训练权重（约 5 MB）。环境占用与下载缓存需预留数 GB 空间。Ultralytics 使用 AGPL-3.0/商业许可，产品集成前请评估许可要求。
 
 运行两个阶段：
 
@@ -105,7 +159,7 @@ python3 -m venv .venv
 .venv/bin/python train.py --stage state --dataset datasets/demo --epochs 50
 ```
 
-默认 CPU、8 个计算线程、batch=2、数据加载 workers=0。全图默认 1280，局部默认 640；可通过 `--threads`、`--batch`、`--imgsz` 调整。预训练权重下载到 `models/`；训练结果保存在 `runs/<stage>/`，重复运行自动使用新目录。`weights/best.pt` 是验证集最优权重，`weights/last.pt` 是最后一轮权重。首次运行可能额外下载绘图字体。只有权重来自可信来源时才加载 `.pt` 文件。
+默认 `--device auto`：有可用 CUDA 时使用 `cuda:0`，否则使用 CPU。可用 `--device cpu`、`--device 0` 等显式指定；CUDA 上默认启用 AMP，可用 `--no-amp` 关闭。CPU 默认 8 个计算线程、batch=2、数据加载 workers=0；GPU 训练可提高 `--batch`。全图默认 1280，局部默认 640；可通过 `--threads`、`--batch`、`--imgsz` 调整。预训练权重下载到 `models/`；训练结果保存在 `runs/<stage>/`，重复运行自动使用新目录。`weights/best.pt` 是验证集最优权重，`weights/last.pt` 是最后一轮权重。首次运行可能额外下载绘图字体。只有权重来自可信来源时才加载 `.pt` 文件。
 
 快速检查环境而非训练可用模型：
 
@@ -143,7 +197,7 @@ runs/widget/weights/best.pt
 runs/state/weights/best.pt
 ```
 
-`last.pt`、smoke 训练权重和其他运行产物仍然不提交。
+这两份权重来自 `widget-v2`、`state-v2` 训练，并已同步到默认路径；对应的 ONNX 模型在 `models/onnx/`。`last.pt`、smoke 训练权重和其他运行产物仍然不提交。
 
 `verify_onnx.py` 会比较 torch 与 ONNX 的组件存在性、状态、组件框 IoU、复选框中心误差和延迟。默认只在组件存在性或中心命中出现差异时失败；`--strict-state` 会把状态差异也视为失败。
 
@@ -234,7 +288,7 @@ ONNX 使用动态宽高输入，最大边长分别为 widget `1280`、state `640
 - 未勾选复选框中心命中率、像素误差和相对对角线误差。
 - 端到端完全正确率和 CPU 延迟。
 
-当前 demo 的 50 轮训练结果统一放在文末的 [Demo 评估数据](#demo-评估数据50-张训练-50-轮)。
+v2 模型在 `datasets/real-v1` 上的评估结果统一放在文末的 [v2 模型与真实混合数据评估](#v2-模型与真实混合数据评估)。
 
 ## Docker HTTP 服务
 
@@ -371,66 +425,100 @@ curl -s http://localhost:8000/ready
 
 Ultralytics YOLO 默认使用 AGPL-3.0，其官方说明也把训练模型纳入 AGPL 范围。商业、闭源或 SaaS 部署前，请确认 AGPL 义务或获取 Ultralytics Enterprise License。
 
-## Demo 评估数据（50 张，训练 50 轮）
+## v2 模型与真实混合数据评估
 
-以下数据只用于验证训练、导出和部署管线，**不是真实场景 benchmark**。
+最终模型为 `widget-v2` 和 `state-v2`，已同步到默认权重路径并导出 ONNX：
 
-### 数据与训练配置
+```text
+runs/widget-v2/weights/best.pt     # 训练产物
+runs/state-v2/weights/best.pt
+runs/widget/weights/best.pt        # 默认路径，内容与 widget-v2 一致
+runs/state/weights/best.pt         # 默认路径，内容与 state-v2 一致
+models/onnx/widget.onnx
+models/onnx/state.onnx
+models/onnx/manifest.json
+```
+
+评估使用本地 `datasets/real-v1`，该数据集**不随仓库提交**，共 5000 张：
+
+- 划分：train 3973 / val 501 / test 526
+- 真实背景 3100 张：普通背景 3000 张 + ALTCHA 背景 100 张
+- 纯合成页面 1649 张
+- 真实有 CF 页面 37 张
+- 真实无 CF 页面 214 张
+- 每个生成集约 20% 为 `absent`，包含按钮、复选框、ALTCHA 等难负样本
+
+### 训练与导出配置
 
 | 项目 | 配置 |
 | --- | --- |
-| 数据集 | `datasets/demo`，50 张合成截图 |
-| 划分 | train 40 / val 5 / test 5 |
-| 状态分布 | absent、unchecked、verified、processing、error 各 10 张 |
-| widget 模型 | YOLO11n，50 epochs，`imgsz=1280`，CPU |
-| state 模型 | YOLO11n，50 epochs，`imgsz=640`，CPU |
-| 部署模型 | ONNX，opset 17，FP32，动态矩形输入 |
+| widget 模型 | YOLO11n，50 epochs，`imgsz=1280`，batch 64，GPU AMP |
+| state 模型 | YOLO11n，50 epochs，`imgsz=640`，batch 64，GPU AMP |
+| 部署模型 | ONNX，opset 17，FP32，动态宽高输入 |
+| 默认阈值 | `conf_widget=0.25`，`conf_state=0.25`，`conflict_margin=0.15`，`iou=0.7` |
 
-### ONNX 检测结果
+### test 结果（526 张）
 
-| 数据 | 组件召回 | 无组件误报 | 组件 IoU | 状态 top-1 | 中心命中 | 中心误差 | 端到端完全正确 |
+| 后端 | Presence | Widget IoU | 状态端到端 | 状态 oracle crop | 未勾选中心 | 完全正确 | 延迟 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| test，5 张 | 4/4 | 0/1 | 0.932 | 2/4 | 1/1 | 0.31 px | 3/5 |
-| all，50 张 | 40/40 | 0/10 | 0.948 | 18/40 | 10/10 | 0.49 px | 28/50 |
+| torch | TP 388 / FP 0 / FN 0 / TN 138 | 0.9906 | 525/526，正样本 387/388 | 387/388 | 101/101，0.2324 px | 525/526 | 51.6 ms，p95 54.1 ms |
+| ONNX | TP 388 / FP 0 / FN 0 / TN 138 | 0.9896 | 525/526，正样本 387/388 | 387/388 | 101/101，0.2405 px | 525/526 | 156.7 ms，p95 254.5 ms |
 
-test 只有 5 张，比例没有统计意义；`all` 包含训练图片，也不是独立测试集。
+val 结果（501 张）：组件 TP 385 / FP 1 / FN 0 / TN 115，IoU 0.9905，状态端到端 500/501，正样本 385/385，中心 98/98，完全正确 500/501。
 
-### 状态混淆矩阵（all，50 张）
+### test 状态混淆矩阵
 
-| GT \ Pred | unchecked | verified | processing | error | unknown |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| verified | 0 | 0 | 0 | 0 | 10 |
-| processing | 0 | 1 | 0 | 0 | 9 |
-| error | 0 | 0 | 0 | 8 | 2 |
+| GT \ Pred | absent | unchecked | verified | processing | error | unknown |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| absent | 138 | 0 | 0 | 0 | 0 | 0 |
+| unchecked | 0 | 101 | 0 | 0 | 0 | 0 |
+| verified | 0 | 0 | 95 | 0 | 1 | 0 |
+| processing | 0 | 0 | 0 | 96 | 0 | 0 |
+| error | 0 | 0 | 0 | 0 | 95 | 0 |
+| unknown | 0 | 0 | 0 | 0 | 0 | 0 |
 
-`unchecked` 10/10 正确，`absent` 10/10 正确；`verified` 全部无法确定，`processing` 多数无法确定。
+唯一错误是一个深色主题的合成 `verified` 样本被判为 `error`，置信度约 0.977；组件框定位正确，oracle crop 也是同样错误，属于 state 模型的外观覆盖不足，不是定位或阈值问题。
 
-### torch / ONNX 一致性（all，50 张）
+### torch / ONNX 一致性（test，526 张）
 
 | 指标 | 结果 |
 | --- | --- |
-| 组件存在性差异 | 0/50 |
-| 状态差异 | 0/50 |
-| 组件框 IoU | 1.000 |
-| 复选框中心 L1 误差 | 0.086 px |
+| 组件存在性差异 | 0/526 |
+| 状态差异 | 0/526 |
+| 组件框 IoU | 0.9976 |
+| 复选框中心 L1 误差 | 0.072 px |
 | 中心命中失败 | 0 |
-
-### 解读
-
-- 组件检测和未勾选复选框定位已经可用。
-- **状态识别目前不可用**：`verified`、`processing` 经常返回 `unknown`，原因是 50 张数据太少，且不同状态的检测框高度重叠。
-- 状态模型的 YOLO mAP 可能不低，但 mAP 不能反映互斥状态的 top-1 分类能力，应以状态准确率和混淆矩阵为准。
-- 下一步应扩充到数百张并加入真实截图；若状态仍然混淆，建议改为“裁剪图单标签分类 + 复选框检测”的双头方案。
+| 延迟 | torch 51.1 ms，ONNX CPU 223.3 ms |
 
 ### 复现
 
 ```bash
 .venv/bin/python -m unittest -v
-.venv/bin/python evaluate.py --backend onnx \
+
+# torch 评估
+.venv/bin/python evaluate.py \
+  --dataset datasets/real-v1 --split test \
+  --widget-weights runs/widget-v2/weights/best.pt \
+  --state-weights runs/state-v2/weights/best.pt \
+  --imgsz-widget 1280 --device cuda:0 \
+  --json-out reports/test-real-v1.json \
+  --overlay-dir overlays/test-real-v1
+
+# ONNX 评估
+.venv/bin/python evaluate.py \
+  --dataset datasets/real-v1 --split test \
+  --backend onnx \
   --widget-weights models/onnx/widget.onnx \
-  --state-weights models/onnx/state.onnx \
-  --split all
-.venv/bin/python verify_onnx.py --split all
+  --state-weights models/onnx/state.onnx
+
+# torch / ONNX 一致性
+.venv/bin/python verify_onnx.py \
+  --dataset datasets/real-v1 --split test \
+  --torch-widget runs/widget-v2/weights/best.pt \
+  --torch-state runs/state-v2/weights/best.pt \
+  --onnx-widget models/onnx/widget.onnx \
+  --onnx-state models/onnx/state.onnx \
+  --manifest models/onnx/manifest.json
 ```
 
-CPU 全图训练可能耗时较长。检查真实截图上的组件召回率、状态混淆和中心点命中率，再决定是否扩大训练。
+`datasets/real-v1`、`reports/`、`overlays/` 均为本地评估产物，不提交到仓库。
