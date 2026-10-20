@@ -417,6 +417,10 @@ docker compose up --build -d
 curl -s http://localhost:8000/ready
 ```
 
+### 镜像发布
+
+推送 `v*` 标签后，`.github/workflows/docker-publish.yml` 会自动构建并发布 GHCR 镜像。
+
 ## 许可证
 
 本项目采用 **GNU Affero General Public License v3.0**，见 [`LICENSE`](LICENSE)。
