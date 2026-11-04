@@ -257,19 +257,24 @@ def generate(args):
         for index in range(args.count):
             # Round-robin gives every split samples even in small smoke runs.
             split = ['val', 'test', 'train', 'train', 'train', 'train', 'train', 'train', 'train', 'train'][index % 10]
-            state = STATES[(index // 10 + index % 10) % 5]
+            state = args.state_list[(index // 10 + index % 10) % len(args.state_list)]
             use_real = bool(real_by_split[split]) and rng.random() < args.real_ratio
             if use_real:
                 real_path = rng.choice(real_by_split[split])
                 if real_path not in real_sizes:
                     real_sizes[real_path] = real_viewport(real_path, args.real_max_size)
-                plan.append({'index': index, 'split': split, 'state': state,
-                             'family': 'real', 'seed': rng.randrange(1, 2**32),
-                             'viewport': real_sizes[real_path], 'real': real_path.name})
+                item = {'index': index, 'split': split, 'state': state,
+                        'family': 'real', 'seed': rng.randrange(1, 2**32),
+                        'viewport': real_sizes[real_path], 'real': real_path.name}
             else:
-                plan.append({'index': index, 'split': split, 'state': state,
-                             'family': rng.choice(FAMILIES[split]), 'seed': rng.randrange(1, 2**32),
-                             'viewport': rng.choice([(1280, 720), (1440, 900), (1920, 1080), (800, 800)])})
+                item = {'index': index, 'split': split, 'state': state,
+                        'family': rng.choice(FAMILIES[split]), 'seed': rng.randrange(1, 2**32),
+                        'viewport': rng.choice([(1280, 720), (1440, 900), (1920, 1080), (800, 800)])}
+            if args.theme != 'random':
+                item['theme'] = args.theme
+            if args.language != 'random':
+                item['language'] = args.language
+            plan.append(item)
         run = {'seed': args.seed, 'count': args.count, 'plan': plan, 'status': 'incomplete'}
         run_path.write_text(json.dumps(run, indent=2))
 
@@ -293,6 +298,10 @@ def generate(args):
                 query_data = {k: item[k] for k in ['seed', 'state', 'family']}
                 if item.get('real'):
                     query_data['real'] = item['real']
+                if item.get('theme'):
+                    query_data['theme'] = item['theme']
+                if item.get('language'):
+                    query_data['lang'] = item['language']
                 url = base + '/?' + urlencode(query_data)
                 last_error = None
                 for attempt in range(1, args.retries + 1):
@@ -320,6 +329,8 @@ def generate(args):
                             };
                             return {state: document.body.dataset.state,
                                 family: document.body.dataset.family,
+                                theme: document.body.dataset.theme,
+                                language: document.body.dataset.language,
                                 viewport: {width: innerWidth, height: innerHeight},
                                 widget: rect('cf-widget'), checkbox: rect('checkbox')};
                         })()""")
@@ -327,7 +338,7 @@ def generate(args):
                             raise RuntimeError('Browser page does not match requested sample')
                         png = client.request('GET', f'/tabs/{tab}/screenshot?' + urlencode(
                             {'userId': client.user, 'fullPage': 'false'}), binary=True)
-                        extra = {'seed': item['seed']}
+                        extra = {'seed': item['seed'], 'font_fixed': True}
                         if item.get('real'):
                             extra.update(source='real-background', background_image=item['real'])
                         save_sample(output, name, split, png, {**annotation, **extra})
@@ -374,6 +385,12 @@ def main():
                         help='Fraction of samples using real backgrounds, 0..1 (default: 1.0)')
     parser.add_argument('--real-max-size', type=int, default=1920,
                         help='Scale real backgrounds to this maximum side, 0 disables (default: 1920)')
+    parser.add_argument('--states', default=','.join(STATES),
+                        help='Comma-separated states to generate (default: all)')
+    parser.add_argument('--theme', choices=['random', 'light', 'dark'], default='random',
+                        help='Force widget/page theme (default: random)')
+    parser.add_argument('--language', choices=['random', 'en', 'zh'], default='random',
+                        help='Force widget language (default: random)')
     parser.add_argument('--resume', action='store_true',
                         help='Continue an interrupted dataset in --output')
     parser.add_argument('--retries', type=int, default=5,
@@ -392,6 +409,10 @@ def main():
         parser.error('--retries must be positive')
     if args.retry_delay < 0:
         parser.error('--retry-delay must be non-negative')
+    args.state_list = [state.strip() for state in args.states.split(',') if state.strip()]
+    unknown_states = sorted(set(args.state_list) - set(STATES))
+    if not args.state_list or unknown_states:
+        parser.error(f'--states must contain only {", ".join(STATES)}')
     if args.serve_only:
         real_images = list_real_images(args.real_images) if args.real_images else []
         with serve(args.host, args.port, args.real_images) as port:

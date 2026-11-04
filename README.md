@@ -333,6 +333,57 @@ CUDA/ROCm 版本按本机驱动和 PyTorch 支持矩阵选择；驱动过旧时�
 
 50 张合成样本训练出的权重只能检查管线，不能据此评价实际识别效果。
 
+### 针对难样本微调
+
+可以指定状态、主题和语言生成定向数据，例如深色主题的 `verified`/`error`：
+
+```bash
+.venv/bin/python generate.py \
+  --count 600 --seed 101 \
+  --states verified,error --theme dark --language en \
+  --output datasets/gen-dark-state
+```
+
+`--states` 控制状态，`--theme` 控制明暗主题，`--language` 可选 `random`、`en`、`zh`。生成页面内置了少量中文字体和 SVG 对勾，避免 Camofox 缺少 CJK 字体时把状态文字和图标渲染成方块。当前只有一种组件模板；不同厂商或不同外观的验证框还不能通过参数切换。
+
+也可以把容易误报的页面作为真实背景生成混合样本：
+
+```bash
+.venv/bin/python generate.py \
+  --real-images images/error1 \
+  --count 300 --seed 102 \
+  --output datasets/gen-error1
+```
+
+把额外难样本加入现有数据集的副本，保持原 val/test 不变：
+
+```bash
+rm -rf datasets/real-v1-ft
+cp -al datasets/real-v1 datasets/real-v1-ft
+.venv/bin/python augment_dataset.py \
+  --dataset datasets/real-v1-ft \
+  --negatives images/error1 \
+  --extra-train datasets/gen-dark-state datasets/gen-error1
+```
+
+然后从 v3 权重继续微调：
+
+```bash
+.venv/bin/python train.py --stage widget \
+  --dataset datasets/real-v1-ft \
+  --weights runs/widget-v3/weights/best.pt \
+  --epochs 15 --batch 32 --imgsz 1280 \
+  --device cuda:0 --name widget-v4-ft
+
+.venv/bin/python train.py --stage state \
+  --dataset datasets/real-v1-ft \
+  --weights runs/state-v3/weights/best.pt \
+  --epochs 20 --batch 64 --imgsz 640 \
+  --device cuda:0 --name state-v4-ft
+```
+
+评估仍使用未改动的 `datasets/real-v1` val/test，避免用微调数据自评。
+
 ### ONNX 导出
 
 部署镜像只使用 ONNX Runtime。训练完成后，在本地导出两个动态宽高模型（最大边长分别为 1280 和 640）：
@@ -360,7 +411,7 @@ runs/widget/weights/best.pt
 runs/state/weights/best.pt
 ```
 
-这两份权重来自 `widget-v2`、`state-v2` 训练，并已同步到默认路径；对应的 ONNX 模型在 `models/onnx/`。`last.pt`、smoke 训练权重和其他运行产物仍然不提交。
+这两份权重来自 `widget-v3`、`state-v3` 训练，并已同步到默认路径；对应的 ONNX 模型在 `models/onnx/`。`last.pt`、smoke 训练权重和其他运行产物仍然不提交。
 
 `verify_onnx.py` 会比较 torch 与 ONNX 的组件存在性、状态、组件框 IoU、复选框中心误差和延迟。默认只在组件存在性或中心命中出现差异时失败；`--strict-state` 会把状态差异也视为失败。
 
@@ -451,21 +502,23 @@ ONNX 使用动态宽高输入，最大边长分别为 widget `1280`、state `640
 - 未勾选复选框中心命中率、像素误差和相对对角线误差。
 - 端到端完全正确率和 CPU 延迟。
 
-v2 模型在 `datasets/real-v1` 上的评估结果统一放在文末的 [v2 模型与真实混合数据评估](#v2-模型与真实混合数据评估)。
+v3 模型在 `datasets/real-v1` 上的评估结果统一放在文末的 [v3 模型与真实混合数据评估](#v3-模型与真实混合数据评估)。
 
-### v2 模型与真实混合数据评估
+### v3 模型与真实混合数据评估
 
-最终模型为 `widget-v2` 和 `state-v2`，已同步到默认权重路径并导出 ONNX：
+最终模型为 `widget-v3` 和 `state-v3`，已同步到默认权重路径并导出 ONNX：
 
 ```text
-runs/widget-v2/weights/best.pt     # 训练产物
-runs/state-v2/weights/best.pt
-runs/widget/weights/best.pt        # 默认路径，内容与 widget-v2 一致
-runs/state/weights/best.pt         # 默认路径，内容与 state-v2 一致
+runs/widget-v3/weights/best.pt     # 训练产物
+runs/state-v3/weights/best.pt
+runs/widget/weights/best.pt        # 默认路径，内容与 widget-v3 一致
+runs/state/weights/best.pt         # 默认路径，内容与 state-v3 一致
 models/onnx/widget.onnx
 models/onnx/state.onnx
 models/onnx/manifest.json
 ```
+
+`widget-v3` 从 `widget-v2` 继续微调，`state-v3` 从 `state-v2` 继续微调，训练数据为 `datasets/real-v1-ft`。
 
 评估使用本地 `datasets/real-v1`，该数据集**不随仓库提交**，共 5000 张：
 
@@ -480,8 +533,8 @@ models/onnx/manifest.json
 
 | 项目 | 配置 |
 | --- | --- |
-| widget 模型 | YOLO11n，50 epochs，`imgsz=1280`，batch 64，GPU AMP |
-| state 模型 | YOLO11n，50 epochs，`imgsz=640`，batch 64，GPU AMP |
+| widget 模型 | 从 `widget-v2` 微调，20 epochs，`imgsz=1280`，batch 64，GPU AMP |
+| state 模型 | 从 `state-v2` 微调，15 epochs，`imgsz=640`，batch 64，GPU AMP |
 | 部署模型 | ONNX，opset 17，FP32，动态宽高输入 |
 | 默认阈值 | `conf_widget=0.25`，`conf_state=0.25`，`conflict_margin=0.15`，`iou=0.7` |
 
@@ -489,10 +542,10 @@ models/onnx/manifest.json
 
 | 后端 | Presence | Widget IoU | 状态端到端 | 状态 oracle crop | 未勾选中心 | 完全正确 | 延迟 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| torch | TP 388 / FP 0 / FN 0 / TN 138 | 0.9906 | 525/526，正样本 387/388 | 387/388 | 101/101，0.2324 px | 525/526 | 51.6 ms，p95 54.1 ms |
-| ONNX | TP 388 / FP 0 / FN 0 / TN 138 | 0.9896 | 525/526，正样本 387/388 | 387/388 | 101/101，0.2405 px | 525/526 | 156.7 ms，p95 254.5 ms |
+| torch | TP 388 / FP 0 / FN 0 / TN 138 | 0.9902 | 526/526，正样本 388/388 | 388/388 | 101/101，0.2780 px | 526/526 | 51.6 ms，p95 53.7 ms |
+| ONNX | TP 388 / FP 0 / FN 0 / TN 138 | 0.9892 | 526/526，正样本 388/388 | 388/388 | 101/101，0.2909 px | 526/526 | 158.3 ms，p95 254.6 ms |
 
-val 结果（501 张）：组件 TP 385 / FP 1 / FN 0 / TN 115，IoU 0.9905，状态端到端 500/501，正样本 385/385，中心 98/98，完全正确 500/501。
+val 结果（501 张）：组件 TP 385 / FP 0 / FN 0 / TN 116，IoU 0.9901，状态端到端 501/501，正样本 385/385，oracle crop 384/385，中心 98/98，完全正确 501/501。
 
 #### test 状态混淆矩阵
 
@@ -500,12 +553,12 @@ val 结果（501 张）：组件 TP 385 / FP 1 / FN 0 / TN 115，IoU 0.9905，�
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | absent | 138 | 0 | 0 | 0 | 0 | 0 |
 | unchecked | 0 | 101 | 0 | 0 | 0 | 0 |
-| verified | 0 | 0 | 95 | 0 | 1 | 0 |
+| verified | 0 | 0 | 96 | 0 | 0 | 0 |
 | processing | 0 | 0 | 0 | 96 | 0 | 0 |
 | error | 0 | 0 | 0 | 0 | 95 | 0 |
 | unknown | 0 | 0 | 0 | 0 | 0 | 0 |
 
-唯一错误是一个深色主题的合成 `verified` 样本被判为 `error`，置信度约 0.977；组件框定位正确，oracle crop 也是同样错误，属于 state 模型的外观覆盖不足，不是定位或阈值问题。
+test 集所有类别全部正确，没有误报和 unknown。
 
 #### torch / ONNX 一致性（test，526 张）
 
@@ -514,9 +567,9 @@ val 结果（501 张）：组件 TP 385 / FP 1 / FN 0 / TN 115，IoU 0.9905，�
 | 组件存在性差异 | 0/526 |
 | 状态差异 | 0/526 |
 | 组件框 IoU | 0.9976 |
-| 复选框中心 L1 误差 | 0.072 px |
+| 复选框中心 L1 误差 | 0.083 px |
 | 中心命中失败 | 0 |
-| 延迟 | torch 51.1 ms，ONNX CPU 223.3 ms |
+| 延迟 | torch 52.6 ms，ONNX CPU 222.4 ms |
 
 #### 复现
 
@@ -526,8 +579,8 @@ val 结果（501 张）：组件 TP 385 / FP 1 / FN 0 / TN 115，IoU 0.9905，�
 # torch 评估
 .venv/bin/python evaluate.py \
   --dataset datasets/real-v1 --split test \
-  --widget-weights runs/widget-v2/weights/best.pt \
-  --state-weights runs/state-v2/weights/best.pt \
+  --widget-weights runs/widget-v3/weights/best.pt \
+  --state-weights runs/state-v3/weights/best.pt \
   --imgsz-widget 1280 --device cuda:0 \
   --json-out reports/test-real-v1.json \
   --overlay-dir overlays/test-real-v1
@@ -542,8 +595,8 @@ val 结果（501 张）：组件 TP 385 / FP 1 / FN 0 / TN 115，IoU 0.9905，�
 # torch / ONNX 一致性
 .venv/bin/python verify_onnx.py \
   --dataset datasets/real-v1 --split test \
-  --torch-widget runs/widget-v2/weights/best.pt \
-  --torch-state runs/state-v2/weights/best.pt \
+  --torch-widget runs/widget-v3/weights/best.pt \
+  --torch-state runs/state-v3/weights/best.pt \
   --onnx-widget models/onnx/widget.onnx \
   --onnx-state models/onnx/state.onnx \
   --manifest models/onnx/manifest.json

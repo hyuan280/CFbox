@@ -52,6 +52,16 @@ Enterprise License.
 `models/onnx/manifest.json` records the Ultralytics version, opset, input
 sizes, class names, and export time for traceability.
 
+## Bundled fonts
+
+`web/cfbox-cjk.woff` is a small subset of Noto Sans CJK SC. Noto fonts are
+copyright Google and licensed under the SIL Open Font License 1.1:
+
+- <https://github.com/notofonts/noto-cjk/blob/main/LICENSE>
+
+It is bundled only so the synthetic page can render the Chinese verification
+labels inside Camofox when the browser image has no CJK fonts installed.
+
 ## Data generation
 
 The synthetic screenshot generator uses the Camofox REST API to control a local
